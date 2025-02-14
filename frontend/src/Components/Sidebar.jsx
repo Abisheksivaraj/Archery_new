@@ -30,9 +30,10 @@ import Dashboard from "./Dashboard";
 import PartMaster from "./PartMaster";
 import PartTable from "./PartTable";
 import User from "./User";
+import Footer from "./Footer";
 
 const drawerWidth = 240;
-const primaryColor = "#448ee4"; // Dark blue  
+const primaryColor = "#448ee4"; // Dark blue
 const dropdownColor = "#B7E9F7"; // Light blue
 const collapsedWidth = 64;
 

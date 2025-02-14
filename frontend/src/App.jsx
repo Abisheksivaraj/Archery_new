@@ -10,30 +10,40 @@ import Footer from "./Components/Footer";
 import Auth from "./Components/Auth";
 
 const App = () => {
-  const location = useLocation(); // Get the current location
-
+  const location = useLocation();
   const isAuthPage = location.pathname === "/";
+  const isDashboardPage = location.pathname.includes("/dashboard");
 
   return (
     <div
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "100vh",
-        overflow: "hidden",
+        minHeight: "100vh",
       }}
     >
       {!isAuthPage && (
-        <div style={{ flex: 1, overflow: "hidden" }}>
+        <div style={{ }}>
           <Sidebar />
+          <div style={{  }}>
+            <Routes>
+              <Route path="/" element={<Auth />} />
+              {/* Add your other routes here */}
+            </Routes>
+          </div>
         </div>
       )}
 
-      <Routes>
-        <Route path="/" element={<Auth />} />
-      </Routes>
+      {isAuthPage && (
+        <div style={{ flex: 1 }}>
+          <Routes>
+            <Route path="/" element={<Auth />} />
+          </Routes>
+        </div>
+      )}
 
-      <Footer />
+      {/* Only show footer when not on dashboard page */}
+      {!isDashboardPage && !Auth && <Footer />}
     </div>
   );
 };
