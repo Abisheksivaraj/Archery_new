@@ -12,7 +12,6 @@ import Auth from "./Components/Auth";
 const App = () => {
   const location = useLocation();
   const isAuthPage = location.pathname === "/";
-  const isDashboardPage = location.pathname.includes("/dashboard");
 
   return (
     <div
@@ -23,12 +22,11 @@ const App = () => {
       }}
     >
       {!isAuthPage && (
-        <div style={{ }}>
+        <div style={{}}>
           <Sidebar />
-          <div style={{  }}>
+          <div style={{}}>
             <Routes>
               <Route path="/" element={<Auth />} />
-              {/* Add your other routes here */}
             </Routes>
           </div>
         </div>
@@ -42,8 +40,21 @@ const App = () => {
         </div>
       )}
 
-      {/* Only show footer when not on dashboard page */}
-      {!isDashboardPage && !Auth && <Footer />}
+      {/* Only show footer when NOT on auth page */}
+      {!isAuthPage && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            width: "100%",
+            backgroundColor: "white",
+            zIndex: 1000,
+          }}
+        >
+          <Footer />
+        </div>
+      )}
     </div>
   );
 };

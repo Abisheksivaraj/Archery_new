@@ -24,6 +24,7 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Routes, Route } from "react-router-dom";
+import Tooltip from "@mui/material/Tooltip";
 import logo from "../assets/logo.png";
 import companyLogo from "../assets/companyLogo.png";
 import Dashboard from "./Dashboard";
@@ -234,6 +235,17 @@ function PersistentDrawerLeft() {
     },
   });
 
+  // Enhanced wrapper for list item that adds tooltip when drawer is collapsed
+  const ListItemWithTooltip = ({ tooltip, children }) => {
+    return !open ? (
+      <Tooltip title={tooltip} placement="right">
+        {children}
+      </Tooltip>
+    ) : (
+      children
+    );
+  };
+
   return (
     <Box sx={{ display: "flex", height: "100vh", overflow: "hidden" }}>
       <CssBaseline />
@@ -293,80 +305,93 @@ function PersistentDrawerLeft() {
 
         <Divider />
         <List>
-          <ListItem disablePadding>
-            <ListItemButton
-              selected={isActive("/dashboard")}
-              onClick={() => handleMenuClick("Dashboard", null, "/dashboard")}
-              sx={getMenuItemStyle(isActive("/dashboard"))}
-            >
-              <ListItemIcon>
-                <DashboardIcon />
-              </ListItemIcon>
-              {open && <ListItemText primary="Dashboard" />}
-            </ListItemButton>
-          </ListItem>
+          <ListItemWithTooltip tooltip="Dashboard">
+            <ListItem disablePadding>
+              <ListItemButton
+                selected={isActive("/dashboard")}
+                onClick={() => handleMenuClick("Dashboard", null, "/dashboard")}
+                sx={getMenuItemStyle(isActive("/dashboard"))}
+              >
+                <ListItemIcon>
+                  <DashboardIcon />
+                </ListItemIcon>
+                {open && <ListItemText primary="Dashboard" />}
+              </ListItemButton>
+            </ListItem>
+          </ListItemWithTooltip>
 
-          <ListItem disablePadding>
-            <ListItemButton
-              selected={isPartMasterActive()}
-              onClick={handlePartMasterClick}
-              sx={getMenuItemStyle(isPartMasterActive())}
-            >
-              <ListItemIcon>
-                <BuildIcon />
-              </ListItemIcon>
-              {open && (
-                <>
-                  <ListItemText primary="Part Master" />
-                  {dropdownOpen ? <ExpandLess /> : <ExpandMore />}
-                </>
-              )}
-            </ListItemButton>
-          </ListItem>
+          <ListItemWithTooltip tooltip="Part Master">
+            <ListItem disablePadding>
+              <ListItemButton
+                selected={isPartMasterActive()}
+                onClick={handlePartMasterClick}
+                sx={getMenuItemStyle(isPartMasterActive())}
+              >
+                <ListItemIcon>
+                  <BuildIcon />
+                </ListItemIcon>
+                {open && (
+                  <>
+                    <ListItemText primary="Part Master" />
+                    {dropdownOpen ? <ExpandLess /> : <ExpandMore />}
+                  </>
+                )}
+              </ListItemButton>
+            </ListItem>
+          </ListItemWithTooltip>
 
           <Collapse in={open && dropdownOpen} timeout="auto" unmountOnExit>
             <List component="div" disablePadding>
-              <ListItem disablePadding>
-                <ListItemButton
-                  selected={isActive("/part")}
-                  sx={getDropdownStyle(isActive("/part"))}
-                  onClick={() => handleMenuClick("Part Master", "Add", "/part")}
-                >
-                  <ListItemIcon>
-                    <AddIcon />
-                  </ListItemIcon>
-                  {open && <ListItemText primary="Add" />}
-                </ListItemButton>
-              </ListItem>
-              <ListItem disablePadding>
-                <ListItemButton
-                  selected={isActive("/part_Table")}
-                  sx={getDropdownStyle(isActive("/part_Table"))}
-                  onClick={() =>
-                    handleMenuClick("Part Master", "Table", "/part_Table")
-                  }
-                >
-                  <ListItemIcon>
-                    <TableChartIcon />
-                  </ListItemIcon>
-                  {open && <ListItemText primary="Table" />}
-                </ListItemButton>
-              </ListItem>
+              <ListItemWithTooltip tooltip="Add Part">
+                <ListItem disablePadding>
+                  <ListItemButton
+                    selected={isActive("/part")}
+                    sx={getDropdownStyle(isActive("/part"))}
+                    onClick={() =>
+                      handleMenuClick("Part Master", "Add", "/part")
+                    }
+                  >
+                    <ListItemIcon>
+                      <AddIcon />
+                    </ListItemIcon>
+                    {open && <ListItemText primary="Add" />}
+                  </ListItemButton>
+                </ListItem>
+              </ListItemWithTooltip>
+
+              <ListItemWithTooltip tooltip="Part Table">
+                <ListItem disablePadding>
+                  <ListItemButton
+                    selected={isActive("/part_Table")}
+                    sx={getDropdownStyle(isActive("/part_Table"))}
+                    onClick={() =>
+                      handleMenuClick("Part Master", "Table", "/part_Table")
+                    }
+                  >
+                    <ListItemIcon>
+                      <TableChartIcon />
+                    </ListItemIcon>
+                    {open && <ListItemText primary="Table" />}
+                  </ListItemButton>
+                </ListItem>
+              </ListItemWithTooltip>
             </List>
           </Collapse>
 
-          <ListItem disablePadding>
-            <ListItemButton
-              selected={isActive("/User")}
-              onClick={() => handleMenuClick("User", null, "/User")}
-              sx={getMenuItemStyle(isActive("/User"))}
-            >
-              <ListItemIcon>
-                <PersonIcon />
-              </ListItemIcon>
-              {open && <ListItemText primary="User" />}
-            </ListItemButton>
-          </ListItem>
+          <ListItemWithTooltip tooltip="User">
+            <ListItem disablePadding>
+              <ListItemButton
+                selected={isActive("/User")}
+                onClick={() => handleMenuClick("User", null, "/User")}
+                sx={getMenuItemStyle(isActive("/User"))}
+              >
+                <ListItemIcon>
+                  <PersonIcon />
+                </ListItemIcon>
+                {open && <ListItemText primary="User" />}
+              </ListItemButton>
+            </ListItem>
+          </ListItemWithTooltip>
         </List>
 
         <Divider />
@@ -379,9 +404,11 @@ function PersistentDrawerLeft() {
             padding: 1,
           }}
         >
-          <IconButton onClick={open ? handleDrawerClose : handleDrawerOpen}>
-            {open ? <ChevronLeftIcon /> : <ChevronRightIcon />}
-          </IconButton>
+          <Tooltip title={open ? "Collapse" : "Expand"}>
+            <IconButton onClick={open ? handleDrawerClose : handleDrawerOpen}>
+              {open ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+            </IconButton>
+          </Tooltip>
         </Box>
       </Drawer>
 
