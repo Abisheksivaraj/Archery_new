@@ -31,14 +31,14 @@ import Dashboard from "./Dashboard";
 import PartMaster from "./PartMaster";
 import PartTable from "./PartTable";
 import User from "./User";
-import Footer from "./Footer";
+
 import { Button } from "@mui/material";
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import PackageTable from "./PackageTable";
 
 const drawerWidth = 240;
-const primaryColor = "#448ee4"; // Dark blue
-const dropdownColor = "#B7E9F7"; // Light blue
+const primaryColor = "#448ee4";
+const dropdownColor = "#B7E9F7";
 const collapsedWidth = 64;
 
 const Main = styled("main", { shouldForwardProp: (prop) => prop !== "open" })(
@@ -121,7 +121,6 @@ function PersistentDrawerLeft() {
       "/part": "Part Master > Add",
       "/part_Table": "Part Master > Table",
       "/User": "User",
-      
     };
 
     const currentMenu = pathToMenuMap[location.pathname];
@@ -239,7 +238,6 @@ function PersistentDrawerLeft() {
     },
   });
 
-  // Enhanced wrapper for list item that adds tooltip when drawer is collapsed
   const ListItemWithTooltip = ({ tooltip, children }) => {
     return !open ? (
       <Tooltip title={tooltip} placement="right">
@@ -266,7 +264,7 @@ function PersistentDrawerLeft() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            pr: 2, // Add some padding on the right
+            pr: 2,
           }}
         >
           <span
@@ -285,7 +283,7 @@ function PersistentDrawerLeft() {
                 "&:hover": {
                   backgroundColor: "rgba(255, 255, 255, 0.2)",
                 },
-                textTransform: "none", // Prevents all-caps
+                textTransform: "none",
               }}
             >
               Table List

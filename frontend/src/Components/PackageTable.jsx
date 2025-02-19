@@ -43,10 +43,9 @@ export default function CustomizedTables() {
     const fetchParts = async () => {
       try {
         const response = await api.get("/getAllProduction");
-        // Check the structure of response.data in console
+
         console.log("API response:", response.data);
 
-        // If the data is in a property like 'productions' or 'data'
         if (response.data.productions) {
           setParts(response.data.productions);
         } else if (response.data.data) {
@@ -55,11 +54,11 @@ export default function CustomizedTables() {
           setParts(response.data);
         } else {
           console.error("Unexpected data structure:", response.data);
-          setParts([]); // Set to empty array as fallback
+          setParts([]);
         }
       } catch (error) {
         console.error("Error fetching parts:", error);
-        setParts([]); // Set to empty array on error
+        setParts([]);
       }
     };
     fetchParts();

@@ -1,9 +1,7 @@
-// In your routes file (e.g., productionRoutes.js)
 const express = require("express");
 const route = express.Router();
 const Production = require("../models/ProductionTracking");
 
-// Route to save package and update counts
 route.post("/savePackage", async (req, res) => {
   try {
     const { partNo, partName, productionQuantity, scannedQuantity } = req.body;
@@ -15,7 +13,14 @@ route.post("/savePackage", async (req, res) => {
       });
     }
 
-    // Find the latest package number to generate a new one
+    const now = new Date();
+    const date = now.toISOString().split("T")[0];
+    const day = now.toLocaleDateString("en-US", { weekday: "long" });
+    const time = now.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
     const latestProduction = await Production.findOne().sort({ pkg_No: -1 });
 
     let newPkgNo;
@@ -24,25 +29,23 @@ route.post("/savePackage", async (req, res) => {
       latestProduction.pkg_No &&
       latestProduction.pkg_No.startsWith("ATPL-")
     ) {
-      // Extract the number part and increment
       const lastNumberStr = latestProduction.pkg_No.split("-")[1];
       const lastNumber = parseInt(lastNumberStr);
       const newNumber = lastNumber + 1;
-      // Pad with zeros to maintain format (e.g., 001, 002, etc.)
       newPkgNo = `ATPL-${newNumber.toString().padStart(3, "0")}`;
     } else {
-      // If no previous package or invalid format, start with 001
       newPkgNo = "ATPL-001";
     }
 
-    // Check if an entry for this partNo already exists
     const existingProduction = await Production.findOne({ partNo });
 
     if (existingProduction) {
-      // Update existing entry
       existingProduction.scannedQuantity += scannedQuantity;
       existingProduction.packageCount += 1;
-      existingProduction.timestamp = new Date();
+      existingProduction.timestamp = now;
+      existingProduction.date = date;
+      existingProduction.day = day;
+      existingProduction.time = time;
 
       await existingProduction.save();
 
@@ -53,7 +56,6 @@ route.post("/savePackage", async (req, res) => {
         newPkgNo,
       });
     } else {
-      // Create new entry
       const newProduction = new Production({
         pkg_No: newPkgNo,
         partNo,
@@ -61,7 +63,10 @@ route.post("/savePackage", async (req, res) => {
         productionQuantity,
         scannedQuantity,
         packageCount: 1,
-        timestamp: new Date(),
+        timestamp: now,
+        date,
+        day,
+        time,
       });
 
       await newProduction.save();
@@ -82,6 +87,46 @@ route.post("/savePackage", async (req, res) => {
   }
 });
 
+route.get("/allDateandDay", async (req, res) => {
+  try {
+    const aggregatedData = await Production.aggregate([
+      {
+        $group: {
+          _id: { date: "$date", day: "$day" },
+          totalPackageCount: { $sum: "$packageCount" },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          date: "$_id.date",
+          day: "$_id.day",
+          packageCount: "$totalPackageCount",
+        },
+      },
+      { $sort: { date: 1 } },
+    ]);
+
+    if (!aggregatedData.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No packages found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: aggregatedData,
+    });
+  } catch (error) {
+    console.error("Error fetching data:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching data",
+      error: error.message,
+    });
+  }
+});
 
 route.get("/getAllProduction", async (req, res) => {
   try {

@@ -1,11 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import Box from "@mui/material/Box";
-import List from "@mui/material/List";
-import Divider from "@mui/material/Divider";
-import ListItem from "@mui/material/ListItem";
-import ListItemButton from "@mui/material/ListItemButton";
-import ListItemText from "@mui/material/ListItemText";
+
 import { Link } from "react-router-dom";
 import logoImage from "../assets/companyLogo.png";
 import { Modal, Button, TextField, Tooltip } from "@mui/material";
@@ -168,11 +164,9 @@ const Table = () => {
 
   const handleDelete = async (selectedPart) => {
     try {
-      // Make a DELETE request
       const response = await api.delete(`/deletePart/${selectedPart._id}`);
 
       if (response.status === 200) {
-        // Filter out the deleted part from the parts list
         setParts(parts.filter((part) => part._id !== selectedPart._id));
         toast.success("Part deleted successfully!", {
           position: toast.POSITION.TOP_RIGHT,
@@ -215,10 +209,7 @@ const Table = () => {
               </thead>
               <tbody>
                 {currentParts.map((part, index) => (
-                  <tr
-                    key={part._id}
-                    className="transition-colors duration-200"
-                  >
+                  <tr key={part._id} className="transition-colors duration-200">
                     <td className="py-3 px-6 border-b text-center border-gray-700">
                       {index + 1 + (currentPage - 1) * partsPerPage}
                     </td>
@@ -232,7 +223,6 @@ const Table = () => {
                       {part.quantity}
                     </td>
                     <td className="flex items-center justify-center h-20 gap-2 py-3 px-6 border-b border-gray-700">
-                      {/* Preview Button */}
                       <Tooltip title="Preview">
                         <Button
                           onClick={() => handlePreview(part)}
@@ -248,7 +238,6 @@ const Table = () => {
                         </Button>
                       </Tooltip>
 
-                      {/* Edit Button */}
                       <Tooltip title="Edit">
                         <Button
                           onClick={() => handleEdit(part)}
@@ -264,7 +253,6 @@ const Table = () => {
                         </Button>
                       </Tooltip>
 
-                      {/* Delete Button */}
                       <Tooltip title="Delete">
                         <Button
                           onClick={() => handleDelete(part)}

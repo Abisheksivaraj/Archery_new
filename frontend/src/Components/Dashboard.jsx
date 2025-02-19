@@ -26,9 +26,10 @@ const Dashboard = () => {
   const [stats, setStats] = useState({
     parts: 0,
     categories: 0,
-    totalCount: 0,
-    packageCount: 0,
+    totalPartsCount: 0,
+    totalPackageCount: 0,
   });
+  const [dailyPackageData, setDailyPackageData] = useState([]);
 
   const primaryColor = "#39a3dd";
   const secondaryColor = "#e85874";
@@ -52,9 +53,17 @@ const Dashboard = () => {
         setStats({
           parts: totalParts,
           categories,
-          totalCount: totalPartCount,
-          packageCount: totalPackageCount,
+          totalPartsCount: totalPartCount,
+          totalPackageCount: totalPackageCount,
         });
+
+        const dailyDataResponse = await api.get("/allDateandDay");
+        if (dailyDataResponse.data.success) {
+          const dailyData = dailyDataResponse.data.data;
+
+          const processedData = processWeeklyData(dailyData);
+          setDailyPackageData(processedData);
+        }
       } catch (error) {
         console.error("Error fetching data:", error);
       }
@@ -65,6 +74,30 @@ const Dashboard = () => {
 
     return () => clearInterval(interval);
   }, []);
+
+  const processWeeklyData = (data) => {
+    const weekdayTemplate = [
+      { name: "Monday", PackageCount: 0 },
+      { name: "Tuesday", PackageCount: 0 },
+      { name: "Wednesday", PackageCount: 0 },
+      { name: "Thursday", PackageCount: 0 },
+      { name: "Friday", PackageCount: 0 },
+      { name: "Saturday", PackageCount: 0 },
+      { name: "Sunday", PackageCount: 0 },
+    ];
+
+    const dayMap = new Map(weekdayTemplate.map((item) => [item.name, item]));
+
+    data.forEach((item) => {
+      const dayName = item.day;
+      if (dayMap.has(dayName)) {
+        const dayData = dayMap.get(dayName);
+        dayData.PackageCount += item.packageCount;
+      }
+    });
+
+    return Array.from(dayMap.values());
+  };
 
   const MetricCard = ({ title, value, icon }) => (
     <Card
@@ -96,27 +129,11 @@ const Dashboard = () => {
     </Card>
   );
 
-  const getLastSixMonths = () => {
-    const months = [];
-    const today = new Date();
-    for (let i = 5; i >= 0; i--) {
-      const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
-      months.push(date.toLocaleString("default", { month: "short" }));
-    }
-    return months;
-  };
-
-  const lineChartData = getLastSixMonths().map((month, index) => ({
-    name: month,
-    Parts: Math.round(stats.parts * (1 + index * 0.1)),
-    Categories: Math.round(stats.categories * (1 + index * 0.05)),
-  }));
-
   const donutChartData = [
     { name: "Total Parts", value: stats.parts },
     { name: "Categories", value: stats.categories },
-    { name: "Total Count", value: stats.totalCount },
-    { name: "Package Count", value: stats.packageCount },
+    { name: "Total Parts Count", value: stats.totalPartsCount },
+    { name: "Package Count", value: stats.totalPackageCount },
   ];
 
   return (
@@ -144,30 +161,28 @@ const Dashboard = () => {
             <Grid item xs={12} sm={6} md={3}>
               <MetricCard
                 title="Total Parts Count"
-                value={stats.totalCount}
+                value={stats.totalPartsCount}
                 icon="🔢"
               />
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <MetricCard
                 title="Total Package Count"
-                value={stats.packageCount}
+                value={stats.totalPackageCount}
                 icon="📊"
               />
             </Grid>
           </Grid>
 
           <Grid container spacing={3} sx={{ mb: 4 }}>
-            {" "}
-            {/* Added margin bottom */}
             <Grid item xs={12} md={6}>
               <Card sx={{ height: "100%", minHeight: 400 }}>
                 <CardContent>
                   <Typography variant="h6" sx={{ color: primaryColor, mb: 2 }}>
-                    Growth Trends
+                    Package Count by Day of Week
                   </Typography>
                   <ResponsiveContainer width="100%" height={340}>
-                    <LineChart data={lineChartData}>
+                    <LineChart data={dailyPackageData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="name" />
                       <YAxis />
@@ -175,17 +190,10 @@ const Dashboard = () => {
                       <Legend />
                       <Line
                         type="monotone"
-                        dataKey="Parts"
+                        dataKey="PackageCount"
                         stroke={primaryColor}
                         strokeWidth={2}
                         dot={{ fill: primaryColor }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="Categories"
-                        stroke={secondaryColor}
-                        strokeWidth={2}
-                        dot={{ fill: secondaryColor }}
                       />
                     </LineChart>
                   </ResponsiveContainer>

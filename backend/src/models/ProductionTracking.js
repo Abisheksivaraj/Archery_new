@@ -1,4 +1,3 @@
-// In your models folder
 const mongoose = require("mongoose");
 
 const productionSchema = new mongoose.Schema({
@@ -22,10 +21,24 @@ const productionSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
-
-  packageCount: { type: Number, default: 0 },
+  packageCount: {
+    type: Number,
+    default: 0,
+  },
   timestamp: {
     type: Date,
+    required: true,
+  },
+  date: {
+    type: String, 
+    required: true,
+  },
+  day: {
+    type: String, 
+    required: true,
+  },
+  time: {
+    type: String,
     required: true,
   },
 });

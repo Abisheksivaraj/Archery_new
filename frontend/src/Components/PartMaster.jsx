@@ -48,16 +48,14 @@ const PartMaster = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); // Prevent form reload
+    e.preventDefault();
 
     try {
-      // Validate formData
       if (!formData.partNo || !formData.partName || !formData.quantity) {
         toast.error("All fields are required.");
         return;
       }
 
-      // Make the API call to save the part
       const response = await api.post("/addPart", {
         partName: formData.partName,
         partNo: formData.partNo,
@@ -65,13 +63,10 @@ const PartMaster = () => {
       });
       toast.success(response.data.message);
 
-      // Generate QR code
       const qrCode = await generateQRCode(formData);
 
-      // Set the current part (replacing any previous part)
       setCurrentPart({ ...formData, qrCode });
 
-      // Clear the form data
       setFormData({ partNo: "", partName: "", quantity: "" });
     } catch (error) {
       const errorMessage =
@@ -82,7 +77,6 @@ const PartMaster = () => {
 
   return (
     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 3, p: 3 }}>
-      {/* Left side - Form */}
       <Toaster position="top-right" reverseOrder={false} />
       <Card
         elevation={4}

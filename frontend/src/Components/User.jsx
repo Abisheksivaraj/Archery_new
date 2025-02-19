@@ -1,9 +1,12 @@
 import React, { useEffect, useState, useRef } from "react";
-import { toast } from "react-toastify";
+// import { toast } from "react-toastify";
+import { toast, Toaster } from "react-hot-toast";
 import logoIcon from "../assets/companyLogo.png";
 import { QRCodeSVG } from "qrcode.react";
 import { api } from "../apiConfig";
 import {
+  Alert,
+  AlertTitle,
   Box,
   Button,
   Card,
@@ -24,23 +27,12 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
-import {
-  CheckCircleOutline,
-  ErrorOutline,
-  WarningAmber,
-  Inventory2,
-  QrCode2,
-  DeleteOutline,
-  LocalShipping,
-  Settings,
-} from "@mui/icons-material";
 
 import SettingsIcon from "@mui/icons-material/Settings";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import InventoryIcon from "@mui/icons-material/Inventory";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 
-// Label component with improved styling
 const PartLabel = ({ partNo, logoUrl, partName, quantity }) => {
   const qrCodeValue = JSON.stringify({
     partNo,
@@ -48,59 +40,114 @@ const PartLabel = ({ partNo, logoUrl, partName, quantity }) => {
     quantity,
   });
 
+  const labelStyle = {
+    width: "100mm",
+    height: "50mm",
+    padding: "6mm",
+    backgroundColor: "white",
+    border: "1px solid #ccc",
+    boxSizing: "border-box",
+    margin: "0 auto",
+    position: "relative",
+    display: "flex",
+    flexDirection: "column",
+  };
+
+  const contentContainerStyle = {
+    width: "100%",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: "2mm",
+    height: "calc(100% - 12mm)",
+  };
+
+  const textContainerStyle = {
+    width: "70%",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-around",
+    overflow: "hidden",
+  };
+
+  const textStyle = {
+    margin: 0,
+    fontSize: "3.5mm",
+    color: "black",
+    fontWeight: "500",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  };
+
+  const qrCodeContainerStyle = {
+    width: "25%",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  };
+
   return (
-    <Paper
-      elevation={0}
-      sx={{
-        width: "100mm",
-        height: "50mm",
-        padding: "6mm",
-        border: "1px solid #e0e0e0",
-        boxSizing: "border-box",
-        margin: "0 auto",
-        position: "relative",
-        display: "flex",
-        flexDirection: "column",
-      }}
-      className="print-content"
-    >
-      <Box sx={{ display: "flex", justifyContent: "center", mb: 1 }}>
-        <img
-          src={logoUrl}
-          alt="Company Logo"
-          style={{
-            width: "25mm",
-            height: "10mm",
-            objectFit: "contain",
-          }}
-        />
-      </Box>
-
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexGrow: 1,
+    <div style={labelStyle} className="print-content">
+      <img
+        src={logoUrl}
+        alt="Company Logo"
+        style={{
+          width: "25mm",
+          height: "10mm",
+          objectFit: "contain",
+          alignSelf: "center",
         }}
-      >
-        <Stack spacing={0.5} sx={{ width: "70%" }}>
-          <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>
-            PartName: <strong>{partName}</strong>
-          </Typography>
-          <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>
-            PartNo: <strong>{partNo}</strong>
-          </Typography>
-          <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>
-            Packing Quantity: <strong>{quantity}</strong>
-          </Typography>
-        </Stack>
+      />
 
-        <Box sx={{ width: "25%", display: "flex", justifyContent: "center" }}>
-          <QRCodeSVG value={qrCodeValue} size={100} level="M" />
-        </Box>
-      </Box>
-    </Paper>
+      <div style={contentContainerStyle}>
+        <div style={textContainerStyle}>
+          <p style={textStyle}>
+            PartName: <strong>{partName}</strong>
+          </p>
+          <p style={textStyle}>
+            PartNo: <strong>{partNo}</strong>
+          </p>
+          <p style={textStyle}>
+            Packing Quantity: <strong>{quantity}</strong>
+          </p>
+        </div>
+
+        <div style={qrCodeContainerStyle}>
+          <QRCodeSVG
+            value={qrCodeValue}
+            size={100}
+            level="M"
+            style={{ margin: 0 }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const CustomAlert = ({ title, message, type }) => (
+  <Alert
+    severity={type}
+    sx={{
+      width: "100%",
+      "& .MuiAlert-message": {
+        width: "100%",
+      },
+    }}
+  >
+    <AlertTitle sx={{ fontWeight: "bold" }}>{title}</AlertTitle>
+    <Typography sx={{ fontWeight: 500 }}>{message}</Typography>
+  </Alert>
+);
+
+const showAlert = (title, message, type) => {
+  toast.custom(
+    (t) => <CustomAlert title={title} message={message} type={type} />,
+    {
+      duration: 4000,
+      position: "top-right",
+    }
   );
 };
 
@@ -115,7 +162,7 @@ const User = () => {
   });
   const [scanQuantity, setScanQuantity] = useState("");
   const [scannedQuantity, setScannedQuantity] = useState(0);
-  const [status, setStatus] = useState("processing");
+  const [status, setStatus] = useState("⚠️ processing");
   const [totalPartCount, setTotalPartCount] = useState(0);
   const [totalPackageCount, setTotalPackageCount] = useState(0);
   const [previousScanQuantity, setPreviousScanQuantity] = useState("");
@@ -123,14 +170,12 @@ const User = () => {
 
   const scanQuantityRef = useRef(null);
 
-  // Auto-focus effect
   useEffect(() => {
     if (selectedPartNo && scanQuantityRef.current) {
       scanQuantityRef.current.focus();
     }
   }, [selectedPartNo]);
 
-  // Add this function in your User component
   const savePackageData = async () => {
     try {
       const response = await api.post("/savePackage", {
@@ -156,7 +201,6 @@ const User = () => {
     }
   };
 
-  // Fetch parts data
   useEffect(() => {
     const fetchParts = async () => {
       try {
@@ -171,7 +215,6 @@ const User = () => {
     fetchParts();
   }, []);
 
-  // Update counts
   const updateCounts = async () => {
     try {
       await api.post("/saveCounts", {
@@ -184,7 +227,6 @@ const User = () => {
     }
   };
 
-  // Add this function to your User component
   const fetchPartPackageCount = async (partNo) => {
     try {
       if (!partNo) return;
@@ -208,7 +250,6 @@ const User = () => {
     }
   }, [totalPartCount, totalPackageCount]);
 
-  // Fetch initial counts
   useEffect(() => {
     const fetchCounts = async () => {
       try {
@@ -226,7 +267,6 @@ const User = () => {
     fetchCounts();
   }, []);
 
-  // Handle printing
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
@@ -266,14 +306,12 @@ const User = () => {
     printWindow.document.close();
   };
 
-  // Handle part number change
-  // Handle part number change
   const handlePartNoChange = (e) => {
     const value = e.target.value;
     setSelectedPartNo(value);
     setScannedQuantity(0);
     setScanQuantity("");
-    setStatus("processing");
+    setStatus("⚠️ processing");
     setPreviousScanQuantity("");
 
     const part = parts.find((part) => part.partNo === value);
@@ -283,7 +321,10 @@ const User = () => {
         quantity: part.quantity,
       });
 
-      // Fetch package count for this part
+      showAlert(
+        `Once the scanned quantity reaches  ${part.quantity}, the label will be automatically printed.`
+      );
+
       fetchPartPackageCount(value);
     } else {
       setSelectedPart({
@@ -294,7 +335,6 @@ const User = () => {
     }
   };
 
-  // Handle scan quantity change
   const handleScanQuantityChange = (e) => {
     const value = e.target.value;
     setScanQuantity(value);
@@ -307,7 +347,6 @@ const User = () => {
     checkStatus(selectedPartNo, value);
   };
 
-  // Make checkStatus async
   const checkStatus = async (partNoValue, scanQuantityValue) => {
     if (String(partNoValue).trim() === String(scanQuantityValue).trim()) {
       setStatus("pass");
@@ -319,7 +358,7 @@ const User = () => {
 
         if (newScannedQuantity === Number(selectedPart.quantity)) {
           setTotalPackageCount((prev) => prev + 1);
-          // Save package data before resetting
+
           await savePackageData();
           setScannedQuantity(0);
           setTimeout(() => {
@@ -349,7 +388,7 @@ const User = () => {
         await api.post("/deleteTotalParts");
         setTotalPartCount(0);
         setDeleteType("");
-        // Fetch updated counts after deletion
+
         const response = await api.get("/getCounts");
         if (response.data) {
           setTotalPartCount(response.data.totalPartCount || 0);
@@ -359,7 +398,7 @@ const User = () => {
         await api.post("/deleteTotalPackages");
         setTotalPackageCount(0);
         setDeleteType("");
-        // Fetch updated counts after deletion
+
         const response = await api.get("/getCounts");
         if (response.data) {
           setTotalPackageCount(response.data.totalPackageCount || 0);
@@ -372,37 +411,17 @@ const User = () => {
     }
   };
 
-  // Helper to render status icon
-  const getStatusInfo = () => {
-    switch (status) {
-      case "pass":
-        return {
-          icon: <CheckCircleOutline fontSize="large" />,
-          color: "success.main",
-          text: "PASS",
-          bgColor: "success.light",
-        };
-      case "fail":
-        return {
-          icon: <ErrorOutline fontSize="large" />,
-          color: "error.main",
-          text: "FAIL",
-          bgColor: "error.light",
-        };
-      default:
-        return {
-          icon: <WarningAmber fontSize="large" />,
-          color: "warning.main",
-          text: "PROCESSING",
-          bgColor: "warning.light",
-        };
-    }
-  };
-
-  const statusInfo = getStatusInfo();
-
   return (
     <Box sx={{ height: "10vh", display: "flex", flexDirection: "column" }}>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          custom: {
+            duration: 4000,
+          },
+        }}
+      />
+
       <Box sx={{ height: "10vh" }}>
         <Container maxWidth="lg" sx={{ height: "10%" }}>
           <Box sx={{ display: "none" }}>
@@ -415,7 +434,6 @@ const User = () => {
           </Box>
 
           <Grid container spacing={2} sx={{ height: "10%" }}>
-            {/* Part Details Section */}
             <Grid item xs={6}>
               <Paper sx={{ p: 2, height: "100%" }}>
                 <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
@@ -475,7 +493,6 @@ const User = () => {
               </Paper>
             </Grid>
 
-            {/* Scan Details Section */}
             <Grid item xs={6}>
               <Paper sx={{ p: 2, height: "100%" }}>
                 <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
@@ -534,15 +551,21 @@ const User = () => {
                         p: 2,
                         textAlign: "center",
                         bgcolor:
-                          status === "PASS ✅"
-                            ? "success.light"
-                            : status === "Fail 🚫"
-                            ? "error.light"
-                            : "warning.light",
+                          status === "pass"
+                            ? "#4CAF50"
+                            : status === "fail"
+                            ? "#F44336"
+                            : "#eab308cc",
                         color: "white",
                       }}
                     >
-                      <Typography variant="h5">{status}</Typography>
+                      <Typography variant="h5">
+                        {status === "pass"
+                          ? "✅ Pass"
+                          : status === "fail"
+                          ? "🚫 Fail"
+                          : "⚠️ Processing"}
+                      </Typography>
                     </Paper>
                   </Grid>
 

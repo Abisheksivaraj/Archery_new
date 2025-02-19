@@ -2,7 +2,7 @@ const express = require("express");
 const route = express.Router();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const Admin = require("../models/AdminModel"); // Ensure correct path
+const Admin = require("../models/AdminModel");
 require("dotenv").config();
 
 route.post("/register", async (req, res) => {
