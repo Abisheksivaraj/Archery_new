@@ -32,6 +32,9 @@ import PartMaster from "./PartMaster";
 import PartTable from "./PartTable";
 import User from "./User";
 import Footer from "./Footer";
+import { Button } from "@mui/material";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import PackageTable from "./PackageTable";
 
 const drawerWidth = 240;
 const primaryColor = "#448ee4"; // Dark blue
@@ -118,6 +121,7 @@ function PersistentDrawerLeft() {
       "/part": "Part Master > Add",
       "/part_Table": "Part Master > Table",
       "/User": "User",
+      
     };
 
     const currentMenu = pathToMenuMap[location.pathname];
@@ -246,16 +250,47 @@ function PersistentDrawerLeft() {
     );
   };
 
+  const handleTableListClick = () => {
+    console.log("Opening table list...");
+    navigate("/table_List");
+  };
+
+  const isUserRoute = location.pathname.toLowerCase() === "/user";
+
   return (
     <Box sx={{ display: "flex", height: "100vh", overflow: "hidden" }}>
       <CssBaseline />
       <AppBar position="fixed" open={open}>
-        <Toolbar>
+        <Toolbar
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            pr: 2, // Add some padding on the right
+          }}
+        >
           <span
             style={{ fontSize: "18px", fontWeight: "bold", color: "white" }}
           >
             {selectedMenu}
           </span>
+          {isUserRoute && (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<ListAltIcon />}
+              onClick={handleTableListClick}
+              sx={{
+                backgroundColor: "rgba(255, 255, 255, 0.1)",
+                "&:hover": {
+                  backgroundColor: "rgba(255, 255, 255, 0.2)",
+                },
+                textTransform: "none", // Prevents all-caps
+              }}
+            >
+              Table List
+            </Button>
+          )}
         </Toolbar>
       </AppBar>
 
@@ -419,6 +454,7 @@ function PersistentDrawerLeft() {
           <Route path="/part" element={<PartMaster />} />
           <Route path="/part_Table" element={<PartTable />} />
           <Route path="/user" element={<User />} />
+          <Route path="/table_List" element={<PackageTable />} />
         </Routes>
       </Main>
     </Box>

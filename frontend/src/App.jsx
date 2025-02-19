@@ -12,6 +12,7 @@ import Auth from "./Components/Auth";
 const App = () => {
   const location = useLocation();
   const isAuthPage = location.pathname === "/";
+  const isDashboard = location.pathname === "/dashboard";
 
   return (
     <div
@@ -22,9 +23,9 @@ const App = () => {
       }}
     >
       {!isAuthPage && (
-        <div style={{}}>
+        <div>
           <Sidebar />
-          <div style={{}}>
+          <div>
             <Routes>
               <Route path="/" element={<Auth />} />
             </Routes>
@@ -40,8 +41,8 @@ const App = () => {
         </div>
       )}
 
-      {/* Only show footer when NOT on auth page */}
-      {!isAuthPage && (
+      {/* ✅ Fix: Ensure Footer is hidden for both Auth and Dashboard pages */}
+      {!isAuthPage && !isDashboard && (
         <div
           style={{
             position: "fixed",

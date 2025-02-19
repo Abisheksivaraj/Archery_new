@@ -1,21 +1,46 @@
 import React, { useEffect, useState, useRef } from "react";
-import axios from "axios";
 import { toast } from "react-toastify";
 import logoIcon from "../assets/companyLogo.png";
 import { QRCodeSVG } from "qrcode.react";
 import { api } from "../apiConfig";
 import {
   Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Container,
+  Divider,
   FormControl,
   Grid,
+  IconButton,
   InputLabel,
+  LinearProgress,
   MenuItem,
+  Paper,
   Select,
+  Stack,
   TextField,
   Typography,
+  useTheme,
 } from "@mui/material";
+import {
+  CheckCircleOutline,
+  ErrorOutline,
+  WarningAmber,
+  Inventory2,
+  QrCode2,
+  DeleteOutline,
+  LocalShipping,
+  Settings,
+} from "@mui/icons-material";
 
-// Separate Label component with corrected props
+import SettingsIcon from "@mui/icons-material/Settings";
+import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
+import InventoryIcon from "@mui/icons-material/Inventory";
+import LocalShippingIcon from "@mui/icons-material/LocalShipping";
+
+// Label component with improved styling
 const PartLabel = ({ partNo, logoUrl, partName, quantity }) => {
   const qrCodeValue = JSON.stringify({
     partNo,
@@ -23,93 +48,65 @@ const PartLabel = ({ partNo, logoUrl, partName, quantity }) => {
     quantity,
   });
 
-  const labelStyle = {
-    width: "100mm",
-    height: "50mm",
-    padding: "6mm",
-    backgroundColor: "white",
-    border: "1px solid #ccc",
-    boxSizing: "border-box",
-    margin: "0 auto",
-    position: "relative",
-    display: "flex",
-    flexDirection: "column",
-  };
-
-  const contentContainerStyle = {
-    width: "100%",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: "2mm",
-    height: "calc(100% - 12mm)", // Account for logo height and padding
-  };
-
-  const textContainerStyle = {
-    width: "70%",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-around",
-    overflow: "hidden",
-  };
-
-  const textStyle = {
-    margin: 0,
-    fontSize: "3.5mm",
-    color: "black",
-    fontWeight: "500",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  };
-
-  const qrCodeContainerStyle = {
-    width: "25%",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-  };
-
   return (
-    <div style={labelStyle} className="print-content">
-      <img
-        src={logoUrl}
-        alt="Company Logo"
-        style={{
-          width: "25mm",
-          height: "10mm",
-          objectFit: "contain",
-          alignSelf: "center",
+    <Paper
+      elevation={0}
+      sx={{
+        width: "100mm",
+        height: "50mm",
+        padding: "6mm",
+        border: "1px solid #e0e0e0",
+        boxSizing: "border-box",
+        margin: "0 auto",
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+      }}
+      className="print-content"
+    >
+      <Box sx={{ display: "flex", justifyContent: "center", mb: 1 }}>
+        <img
+          src={logoUrl}
+          alt="Company Logo"
+          style={{
+            width: "25mm",
+            height: "10mm",
+            objectFit: "contain",
+          }}
+        />
+      </Box>
+
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexGrow: 1,
         }}
-      />
-
-      <div style={contentContainerStyle}>
-        <div style={textContainerStyle}>
-          <p style={textStyle}>
+      >
+        <Stack spacing={0.5} sx={{ width: "70%" }}>
+          <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>
             PartName: <strong>{partName}</strong>
-          </p>
-          <p style={textStyle}>
+          </Typography>
+          <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>
             PartNo: <strong>{partNo}</strong>
-          </p>
-          <p style={textStyle}>
+          </Typography>
+          <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>
             Packing Quantity: <strong>{quantity}</strong>
-          </p>
-        </div>
+          </Typography>
+        </Stack>
 
-        <div style={qrCodeContainerStyle}>
-          <QRCodeSVG
-            value={qrCodeValue}
-            size={100}
-            level="M"
-            style={{ margin: 0 }}
-          />
-        </div>
-      </div>
-    </div>
+        <Box sx={{ width: "25%", display: "flex", justifyContent: "center" }}>
+          <QRCodeSVG value={qrCodeValue} size={100} level="M" />
+        </Box>
+      </Box>
+    </Paper>
   );
 };
 
 const User = () => {
+  const theme = useTheme();
+
   const [parts, setParts] = useState([]);
   const [selectedPartNo, setSelectedPartNo] = useState("");
   const [selectedPart, setSelectedPart] = useState({
@@ -118,7 +115,7 @@ const User = () => {
   });
   const [scanQuantity, setScanQuantity] = useState("");
   const [scannedQuantity, setScannedQuantity] = useState(0);
-  const [status, setStatus] = useState("⚠️ Processing");
+  const [status, setStatus] = useState("processing");
   const [totalPartCount, setTotalPartCount] = useState(0);
   const [totalPackageCount, setTotalPackageCount] = useState(0);
   const [previousScanQuantity, setPreviousScanQuantity] = useState("");
@@ -132,6 +129,32 @@ const User = () => {
       scanQuantityRef.current.focus();
     }
   }, [selectedPartNo]);
+
+  // Add this function in your User component
+  const savePackageData = async () => {
+    try {
+      const response = await api.post("/savePackage", {
+        partNo: selectedPartNo,
+        partName: selectedPart.partName,
+        productionQuantity: selectedPart.quantity,
+        scannedQuantity: Number(selectedPart.quantity),
+      });
+
+      if (response.data.success) {
+        // Display the new package number
+        toast.success(`Package ${response.data.newPkgNo} created successfully`);
+
+        // If you want to update the current part's package count in the UI
+        setSelectedPart((prev) => ({
+          ...prev,
+          packageCount: response.data.data.packageCount,
+        }));
+      }
+    } catch (error) {
+      console.error("Error saving package data:", error);
+      toast.error("Failed to save package data");
+    }
+  };
 
   // Fetch parts data
   useEffect(() => {
@@ -158,6 +181,24 @@ const User = () => {
     } catch (error) {
       console.error("Error saving counts:", error);
       toast.error("Failed to save counts");
+    }
+  };
+
+  // Add this function to your User component
+  const fetchPartPackageCount = async (partNo) => {
+    try {
+      if (!partNo) return;
+
+      const response = await api.get(`/getPackageCount/${partNo}`);
+      if (response.data.success) {
+        setSelectedPart((prev) => ({
+          ...prev,
+          packageCount: response.data.packageCount,
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching package count:", error);
+      toast.error("Failed to fetch package count");
     }
   };
 
@@ -226,12 +267,13 @@ const User = () => {
   };
 
   // Handle part number change
+  // Handle part number change
   const handlePartNoChange = (e) => {
     const value = e.target.value;
     setSelectedPartNo(value);
     setScannedQuantity(0);
     setScanQuantity("");
-    setStatus("⚠️ Processing");
+    setStatus("processing");
     setPreviousScanQuantity("");
 
     const part = parts.find((part) => part.partNo === value);
@@ -240,10 +282,14 @@ const User = () => {
         partName: part.partName,
         quantity: part.quantity,
       });
+
+      // Fetch package count for this part
+      fetchPartPackageCount(value);
     } else {
       setSelectedPart({
         partName: "",
         quantity: "",
+        packageCount: 0,
       });
     }
   };
@@ -253,7 +299,7 @@ const User = () => {
     const value = e.target.value;
     setScanQuantity(value);
 
-    if (status === "Fail 🚫") {
+    if (status === "fail") {
       setScanQuantity(value);
       setPreviousScanQuantity("");
     }
@@ -261,10 +307,10 @@ const User = () => {
     checkStatus(selectedPartNo, value);
   };
 
-  // Check status
-  const checkStatus = (partNoValue, scanQuantityValue) => {
+  // Make checkStatus async
+  const checkStatus = async (partNoValue, scanQuantityValue) => {
     if (String(partNoValue).trim() === String(scanQuantityValue).trim()) {
-      setStatus("PASS ✅");
+      setStatus("pass");
       if (scanQuantityValue !== previousScanQuantity) {
         const newScannedQuantity = scannedQuantity + 1;
 
@@ -273,6 +319,8 @@ const User = () => {
 
         if (newScannedQuantity === Number(selectedPart.quantity)) {
           setTotalPackageCount((prev) => prev + 1);
+          // Save package data before resetting
+          await savePackageData();
           setScannedQuantity(0);
           setTimeout(() => {
             handlePrint();
@@ -284,7 +332,7 @@ const User = () => {
         setPreviousScanQuantity(scanQuantityValue);
       }
     } else {
-      setStatus("Fail 🚫");
+      setStatus("fail");
       setPreviousScanQuantity("");
       setTimeout(() => {
         setScanQuantity("");
@@ -294,8 +342,6 @@ const User = () => {
       }, 500);
     }
   };
-
-  // Modify just the handleDelete function within the User component:
 
   const handleDelete = async (type) => {
     try {
@@ -326,265 +372,266 @@ const User = () => {
     }
   };
 
+  // Helper to render status icon
+  const getStatusInfo = () => {
+    switch (status) {
+      case "pass":
+        return {
+          icon: <CheckCircleOutline fontSize="large" />,
+          color: "success.main",
+          text: "PASS",
+          bgColor: "success.light",
+        };
+      case "fail":
+        return {
+          icon: <ErrorOutline fontSize="large" />,
+          color: "error.main",
+          text: "FAIL",
+          bgColor: "error.light",
+        };
+      default:
+        return {
+          icon: <WarningAmber fontSize="large" />,
+          color: "warning.main",
+          text: "PROCESSING",
+          bgColor: "warning.light",
+        };
+    }
+  };
+
+  const statusInfo = getStatusInfo();
+
   return (
-    <div className=" text-white">
-      <div style={{ display: "none" }}>
-        <PartLabel
-          partNo={selectedPartNo}
-          logoUrl={logoIcon}
-          partName={selectedPart.partName}
-          quantity={selectedPart.quantity}
-        />
-      </div>
+    <Box sx={{ height: "10vh", display: "flex", flexDirection: "column" }}>
+      <Box sx={{ height: "10vh" }}>
+        <Container maxWidth="lg" sx={{ height: "10%" }}>
+          <Box sx={{ display: "none" }}>
+            <PartLabel
+              partNo={selectedPartNo}
+              logoUrl={logoIcon}
+              partName={selectedPart.partName}
+              quantity={selectedPart.quantity}
+            />
+          </Box>
 
-      <div className="">
-        <div>
-          <h2 className="text-2xl font-semibold text-blue-400 mb-6">
-            ⚙️ Part Details
-          </h2>
-          <Grid
-            container
-            spacing={3}
-            alignItems="center"
-            sx={{ display: "flex", gap: 2, padding: "5mm" }}
-          >
-            {/* Part No and Part Name Section */}
-            <FormControl
-              fullWidth
-              variant="outlined"
-              sx={{
-                display: "flex",
-                gap: 2,
-                flexDirection: "row",
-                alignItems: "center", // Ensure alignment of elements in the row
-                flex: 3, // Adjust flex to manage space allocation
-              }}
-            >
-              <InputLabel id="part-no-label">Part No</InputLabel>
-              <Select
-                labelId="part-no-label"
-                value={selectedPartNo}
-                onChange={handlePartNoChange}
-                label="Part No"
-                autoFocus
-                sx={{ flex: 1 }} // Ensure the Select occupies appropriate space
-              >
-                <MenuItem value="">
-                  <em>None</em>
-                </MenuItem>
-                {parts.map((part) => (
-                  <MenuItem key={part._id} value={part.partNo}>
-                    {part.partNo}
-                  </MenuItem>
-                ))}
-              </Select>
-
-              <TextField
-                id="part-name"
-                label="Part Name"
-                value={selectedPart.partName}
-                InputProps={{
-                  readOnly: true,
-                }}
-                fullWidth
-                sx={{ flex: 2 }} // Ensure the TextField occupies appropriate space
-              />
-            </FormControl>
-
-            {/* Packing Quantity Section */}
-            <Box
-              display="flex"
-              flexDirection="column"
-              alignItems="center"
-              justifyContent="center"
-              sx={{
-                textAlign: "center",
-                flex: 1, // Adjust flex to manage space allocation
-                minWidth: 150, // Optional: set a minimum width for consistent appearance
-              }}
-            >
-              <Typography variant="subtitle1" fontWeight="medium" gutterBottom>
-                Packing Quantity
-              </Typography>
-              <Box
-                sx={{
-                  backgroundColor: "gray",
-                  color: "white",
-                  py: 2,
-                  px: 4,
-                  borderRadius: 2,
-                  fontSize: "1.5rem",
-                  fontWeight: "bold",
-                  boxShadow: 1,
-                }}
-              >
-                {selectedPart.quantity || "0"}
-              </Box>
-            </Box>
-          </Grid>
-        </div>
-
-        <div>
-          <h2 className="text-2xl font-semibold text-blue-400 mb-6">
-            📇 Scan Details
-          </h2>
-          <Grid container spacing={3}>
-            {/* Scan Quantity Section */}
-            <Grid item xs={12} md={4}>
-              <Typography variant="body1" gutterBottom>
-                Scan Quantity
-              </Typography>
-              <TextField
-                type="text"
-                inputRef={scanQuantityRef} // MUI uses `inputRef` instead of `ref` for inputs
-                value={scanQuantity}
-                onChange={handleScanQuantityChange}
-                fullWidth
-                variant="outlined"
-                sx={{
-                  borderRadius: 1,
-                  "& .MuiOutlinedInput-root": {
-                    "& fieldset": {
-                      borderColor: "#4b5563", // border-gray-600 equivalent
-                    },
-                    "&:hover fieldset": {
-                      borderColor: "#10b981", // focus:ring-green-500 equivalent
-                    },
-                    "&.Mui-focused fieldset": {
-                      borderColor: "#10b981", // focus state
-                    },
-                  },
-                }}
-              />
-            </Grid>
-
-            {/* Scanned Quantity Section */}
-            <Grid item xs={12} md={4}>
-              <Typography variant="body1" gutterBottom>
-                Scanned Quantity
-              </Typography>
-              <Box
-                sx={{
-                  backgroundColor: "rgba(34, 197, 94, 0.8)", // bg-green-600/80 equivalent
-                  color: "white",
-                  py: 2,
-                  px: 3,
-                  borderRadius: 1,
-                  fontSize: "1.5rem", // text-2xl equivalent
-                  fontWeight: "bold",
-                  textAlign: "center",
-                  boxShadow: "inset 0px 4px 6px rgba(0, 0, 0, 0.2)", // shadow-inner equivalent
-                }}
-              >
-                {scannedQuantity}
-              </Box>
-            </Grid>
-
-            {/* Status Section */}
-            <Grid item xs={12} md={4}>
-              <Typography variant="body1" gutterBottom>
-                Status
-              </Typography>
-              <Box
-                sx={{
-                  py: 2,
-                  px: 3,
-                  textAlign: "center",
-                  borderRadius: 1,
-                  fontSize: "1.5rem", // text-2xl equivalent
-                  fontWeight: "bold",
-                  boxShadow: "inset 0px 4px 6px rgba(0, 0, 0, 0.2)", // shadow-inner equivalent
-                  backgroundColor:
-                    status === "PASS ✅"
-                      ? "rgba(34, 197, 94, 0.8)" // bg-green-500/80 equivalent
-                      : status === "Fail 🚫"
-                      ? "rgba(239, 68, 68, 0.8)" // bg-red-500/80 equivalent
-                      : "rgba(234, 179, 8, 0.8)", // bg-yellow-500/80 equivalent
-                  color: "white",
-                }}
-              >
-                {status}
-              </Box>
-            </Grid>
-          </Grid>
-         
-          <Grid container spacing={3}>
-            {/* Total Part Count Section */}
-            <Grid item xs={12} md={6}>
-              <Box
-                display="flex"
-                flexDirection="column"
-                alignItems="center"
-                textAlign="center"
-              >
-                <Typography variant="h6" sx={{ color: "blue", mb: 1 }}>
-                  Total Part Count
-                </Typography>
-                <Box
-                  onClick={() => {
-                    setDeleteType("parts");
-                    handleDelete();
-                  }}
-                  sx={{
-                    backgroundColor: "#f07167",
-                    color: "white",
-                    py: 2,
-                    px: 4,
-                    borderRadius: 2,
-                    fontSize: "1.5rem", // text-2xl equivalent
-                    fontWeight: "bold",
-                    boxShadow: "inset 0px 4px 6px rgba(0, 0, 0, 0.2)", // shadow-inner equivalent
-                    cursor: "pointer",
-                    "&:hover": {
-                      opacity: 0.9,
-                    },
-                  }}
-                >
-                  {totalPartCount}
+          <Grid container spacing={2} sx={{ height: "10%" }}>
+            {/* Part Details Section */}
+            <Grid item xs={6}>
+              <Paper sx={{ p: 2, height: "100%" }}>
+                <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                  <IconButton size="small" sx={{ mr: 1 }}>
+                    <SettingsIcon color="primary" />
+                  </IconButton>
+                  <Typography variant="h6" color="primary">
+                    Part Details
+                  </Typography>
                 </Box>
-              </Box>
+
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={8}>
+                    <FormControl fullWidth>
+                      <InputLabel>Part No</InputLabel>
+                      <Select
+                        value={selectedPartNo}
+                        onChange={handlePartNoChange}
+                        label="Part No"
+                        autoFocus
+                      >
+                        <MenuItem value="">
+                          <em>None</em>
+                        </MenuItem>
+                        {parts.map((part) => (
+                          <MenuItem key={part._id} value={part.partNo}>
+                            {part.partNo}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+
+                  <Grid item xs={12} md={4}>
+                    <Paper
+                      variant="outlined"
+                      sx={{ p: 2, textAlign: "center" }}
+                    >
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Packing Quantity
+                      </Typography>
+                      <Typography variant="h4" color="primary" sx={{ mt: 1 }}>
+                        {selectedPart.quantity || "0"}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <TextField
+                      label="Part Name"
+                      value={selectedPart.partName}
+                      fullWidth
+                      InputProps={{ readOnly: true }}
+                    />
+                  </Grid>
+                </Grid>
+              </Paper>
             </Grid>
 
-            {/* Total Package Count Section */}
-            <Grid item xs={12} md={6}>
-              <Box
-                display="flex"
-                flexDirection="column"
-                alignItems="center"
-                textAlign="center"
-              >
-                <Typography variant="h6" sx={{ color: "blue", mb: 1 }}>
-                  Total Package Count
-                </Typography>
-                <Box
-                  onClick={() => {
-                    setDeleteType("packages");
-                    handleDelete();
-                  }}
-                  sx={{
-                    backgroundColor: "#00a8aa",
-                    color: "white",
-                    py: 2,
-                    px: 4,
-                    borderRadius: 2,
-                    fontSize: "1.5rem", // text-2xl equivalent
-                    fontWeight: "bold",
-                    boxShadow: "inset 0px 4px 6px rgba(0, 0, 0, 0.2)", // shadow-inner equivalent
-                    cursor: "pointer",
-                    "&:hover": {
-                      opacity: 0.9,
-                    },
-                  }}
-                >
-                  {totalPackageCount}
+            {/* Scan Details Section */}
+            <Grid item xs={6}>
+              <Paper sx={{ p: 2, height: "100%" }}>
+                <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                  <IconButton size="small" sx={{ mr: 1 }}>
+                    <QrCodeScannerIcon color="primary" />
+                  </IconButton>
+                  <Typography variant="h6" color="primary">
+                    Scan Details
+                  </Typography>
                 </Box>
-              </Box>
+
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Box sx={{ mb: 2 }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          mb: 1,
+                        }}
+                      >
+                        <Typography variant="subtitle1" color="text.secondary">
+                          Current Package Progress
+                        </Typography>
+                        <Typography
+                          variant="subtitle1"
+                          color="primary"
+                          sx={{ fontWeight: "medium" }}
+                        >
+                          {scannedQuantity} / {selectedPart.quantity || 0}
+                        </Typography>
+                      </Box>
+                      <LinearProgress
+                        variant="determinate"
+                        value={
+                          selectedPart.quantity
+                            ? (scannedQuantity /
+                                Number(selectedPart.quantity)) *
+                              100
+                            : 0
+                        }
+                        sx={{
+                          height: 8,
+                          borderRadius: 1,
+                          backgroundColor: "grey.200",
+                          "& .MuiLinearProgress-bar": {
+                            backgroundColor: "primary.main",
+                          },
+                        }}
+                      />
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Paper
+                      sx={{
+                        p: 2,
+                        textAlign: "center",
+                        bgcolor:
+                          status === "PASS ✅"
+                            ? "success.light"
+                            : status === "Fail 🚫"
+                            ? "error.light"
+                            : "warning.light",
+                        color: "white",
+                      }}
+                    >
+                      <Typography variant="h5">{status}</Typography>
+                    </Paper>
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <TextField
+                      label="Scan Quantity"
+                      inputRef={scanQuantityRef}
+                      value={scanQuantity}
+                      onChange={handleScanQuantityChange}
+                      fullWidth
+                      autoComplete="off"
+                    />
+                  </Grid>
+                </Grid>
+              </Paper>
+            </Grid>
+
+            <Grid item xs={12}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={4}>
+                  <Paper
+                    sx={{
+                      p: 2,
+                      textAlign: "center",
+                      height: "100%",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <IconButton sx={{ mb: 1 }}>
+                      <InventoryIcon color="primary" fontSize="large" />
+                    </IconButton>
+                    <Typography variant="h6" color="primary" gutterBottom>
+                      Total Part Count
+                    </Typography>
+                    <Typography variant="h4">{totalPartCount}</Typography>
+                  </Paper>
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <Paper
+                    sx={{
+                      p: 2,
+                      textAlign: "center",
+                      height: "100%",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <IconButton sx={{ mb: 1 }}>
+                      <LocalShippingIcon color="primary" fontSize="large" />
+                    </IconButton>
+                    <Typography variant="h6" color="primary" gutterBottom>
+                      Current Part Packages
+                    </Typography>
+                    <Typography variant="h4">
+                      {selectedPart.packageCount || 0}
+                    </Typography>
+                  </Paper>
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <Paper
+                    sx={{
+                      p: 2,
+                      textAlign: "center",
+                      height: "100%",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <IconButton sx={{ mb: 1 }}>
+                      <LocalShippingIcon color="primary" fontSize="large" />
+                    </IconButton>
+                    <Typography variant="h6" color="primary" gutterBottom>
+                      Total Package Count
+                    </Typography>
+                    <Typography variant="h4">{totalPackageCount}</Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
             </Grid>
           </Grid>
-          ;
-        </div>
-      </div>
-    </div>
+        </Container>
+      </Box>
+    </Box>
   );
 };
 

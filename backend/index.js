@@ -30,6 +30,9 @@ app.use(adminRoute);
 const partRoutes = require("./src/Route/PartRoute");
 app.use(partRoutes);
 
+const productionRoutes = require("./src/Route/ProductionRoute");
+app.use(productionRoutes);
+
 // Count management
 let counts = {
   totalPartCount: 0,

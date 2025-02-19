@@ -166,7 +166,7 @@ const Dashboard = () => {
                   <Typography variant="h6" sx={{ color: primaryColor, mb: 2 }}>
                     Growth Trends
                   </Typography>
-                  <ResponsiveContainer width="100%" height={350}>
+                  <ResponsiveContainer width="100%" height={340}>
                     <LineChart data={lineChartData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="name" />
@@ -198,7 +198,7 @@ const Dashboard = () => {
                   <Typography variant="h6" sx={{ color: primaryColor, mb: 2 }}>
                     Distribution Overview
                   </Typography>
-                  <ResponsiveContainer width="100%" height={350}>
+                  <ResponsiveContainer width="100%" height={340}>
                     <PieChart>
                       <Pie
                         data={donutChartData}
