@@ -322,7 +322,7 @@ const User = () => {
       });
 
       showAlert(
-        `Once the scanned quantity reaches  ${part.quantity}, the label will be automatically printed.`
+        `Once the scan quantity reaches  ${part.quantity}, the label will be automatically printed.`
       );
 
       fetchPartPackageCount(value);

@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
-import axios from "axios";
+
 import Box from "@mui/material/Box";
 
-import { Link } from "react-router-dom";
+
 import logoImage from "../assets/companyLogo.png";
 import { Modal, Button, TextField, Tooltip } from "@mui/material";
 import { toast } from "react-toastify";
