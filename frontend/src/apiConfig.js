@@ -1,10 +1,4 @@
-// // config.js
 
-// const config = {
-//   backendUrl: "http://localhost:5555", // Replace with your actual backend URL
-// };
-
-// export default config;
 
 import axios from "axios";
 
