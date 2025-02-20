@@ -4,5 +4,11 @@
   "routes": [
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/" }
-  ]
+  ],
+  
+  "functions": {
+    "api/*": {
+      "maxDuration": 60
+    
+  }
 }
