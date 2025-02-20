@@ -76,7 +76,7 @@ const PartMaster = () => {
   };
 
   return (
-    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 3, p: 3 }}>
+    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 3, }}>
       <Toaster position="top-right" reverseOrder={false} />
       <Card
         elevation={4}
@@ -87,6 +87,16 @@ const PartMaster = () => {
           borderRadius: 3,
           backgroundColor: "#f8f9fa",
           boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.2)",
+          width: {
+            xs: "40vh",
+            sm: "50vh",
+            md:"80vh"
+          },
+          WebkitOverflowScrolling: {
+            xs: "touch",
+            sm: "touch",
+            md: "auto",
+          },
         }}
       >
         <Typography

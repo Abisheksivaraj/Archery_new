@@ -24,6 +24,7 @@ import {
   Select,
   Stack,
   TextField,
+  Tooltip,
   Typography,
   useTheme,
 } from "@mui/material";
@@ -32,6 +33,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import InventoryIcon from "@mui/icons-material/Inventory";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
+import BackpackIcon from "@mui/icons-material/Backpack";
 
 const PartLabel = ({ partNo, logoUrl, partName, quantity }) => {
   const qrCodeValue = JSON.stringify({
@@ -382,37 +384,44 @@ const User = () => {
     }
   };
 
-  const handleDelete = async (type) => {
+
+  const handleResetAllCounts = async () => {
     try {
-      if (type === "parts") {
-        await api.post("/deleteTotalParts");
+      const response = await api.post("/deleteAllCounts");
+      if (response.data.counts) {
         setTotalPartCount(0);
-        setDeleteType("");
-
-        const response = await api.get("/getCounts");
-        if (response.data) {
-          setTotalPartCount(response.data.totalPartCount || 0);
-        }
-        toast.success("Total parts count reset successfully");
-      } else if (type === "packages") {
-        await api.post("/deleteTotalPackages");
         setTotalPackageCount(0);
-        setDeleteType("");
-
-        const response = await api.get("/getCounts");
-        if (response.data) {
-          setTotalPackageCount(response.data.totalPackageCount || 0);
-        }
-        toast.success("Total packages count reset successfully");
+        toast.success("All counts reset successfully");
       }
     } catch (error) {
-      console.error("Error in deletion:", error);
-      toast.error(`Error resetting ${type} count`);
+      console.error("Error resetting counts:", error);
+      toast.error("Failed to reset counts");
     }
   };
 
   return (
-    <Box sx={{ height: "10vh", display: "flex", flexDirection: "column" }}>
+    <Box
+      sx={{
+        height: "10vh",
+        display: "flex",
+        overflowY: {
+          xs: "auto",
+          sm: "auto",
+          md: "visible",
+        },
+        height: {
+          xs: "100vh",
+          sm: "100vh",
+          md: "auto",
+        },
+        WebkitOverflowScrolling: {
+          xs: "touch",
+          sm: "touch",
+          md: "auto",
+        },
+        flexDirection: "column",
+      }}
+    >
       <Toaster
         position="top-right"
         toastOptions={{
@@ -434,7 +443,13 @@ const User = () => {
           </Box>
 
           <Grid container spacing={2} sx={{ height: "10%" }}>
-            <Grid item xs={6}>
+            <Grid
+              item
+              xs={12} // Full width on xs
+              sm={6} // Full width on sm
+              md={6} // Half width on md and up
+              sx={{ mb: { xs: 2, sm: 2, md: 0 } }}
+            >
               <Paper sx={{ p: 2, height: "100%" }}>
                 <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
                   <IconButton size="small" sx={{ mr: 1 }}>
@@ -446,7 +461,7 @@ const User = () => {
                 </Box>
 
                 <Grid container spacing={2}>
-                  <Grid item xs={12} md={8}>
+                  <Grid item xs={12} sm={12} md={8}>
                     <FormControl fullWidth>
                       <InputLabel>Part No</InputLabel>
                       <Select
@@ -467,7 +482,7 @@ const User = () => {
                     </FormControl>
                   </Grid>
 
-                  <Grid item xs={12} md={4}>
+                  <Grid item xs={12} sm={12} md={4}>
                     <Paper
                       variant="outlined"
                       sx={{ p: 2, textAlign: "center" }}
@@ -493,7 +508,12 @@ const User = () => {
               </Paper>
             </Grid>
 
-            <Grid item xs={6}>
+            <Grid
+              item
+              xs={12} // Full width on xs
+              sm={6} // Full width on sm
+              md={6} // Half width on md and up
+            >
               <Paper sx={{ p: 2, height: "100%" }}>
                 <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
                   <IconButton size="small" sx={{ mr: 1 }}>
@@ -505,13 +525,18 @@ const User = () => {
                 </Box>
 
                 <Grid container spacing={2}>
-                  <Grid item xs={12} md={6}>
+                  <Grid item xs={12} sm={12} md={6}>
                     <Box sx={{ mb: 2 }}>
                       <Box
                         sx={{
                           display: "flex",
                           justifyContent: "space-between",
                           mb: 1,
+                          flexDirection: {
+                            xs: "column",
+                            sm: "column",
+                            md: "row",
+                          },
                         }}
                       >
                         <Typography variant="subtitle1" color="text.secondary">
@@ -545,7 +570,8 @@ const User = () => {
                       />
                     </Box>
                   </Grid>
-                  <Grid item xs={12} md={6}>
+
+                  <Grid item xs={12} sm={12} md={6}>
                     <Paper
                       sx={{
                         p: 2,
@@ -583,22 +609,42 @@ const User = () => {
               </Paper>
             </Grid>
 
+            {/* Statistics Cards */}
             <Grid item xs={12}>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={4}>
+                <Grid item xs={12} sm={12} md={4}>
                   <Paper
                     sx={{
                       p: 2,
                       textAlign: "center",
-                      height: "100%",
+                      height: { xs: "auto", sm: "auto", md: "100%" },
                       display: "flex",
                       flexDirection: "column",
                       justifyContent: "center",
+                      mb: { xs: 2, sm: 2, md: 0 },
                     }}
                   >
-                    <IconButton sx={{ mb: 1 }}>
-                      <InventoryIcon color="primary" fontSize="large" />
-                    </IconButton>
+                    <Tooltip title="Reset all package counts" arrow>
+                      <IconButton
+                        sx={{
+                          mb: 1,
+                          borderRadius: "100%", 
+                          width: "56px", 
+                          height: "56px",
+                        }}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              "Are you sure you want to reset all counts?"
+                            )
+                          ) {
+                            handleResetAllCounts();
+                          }
+                        }}
+                      >
+                        <InventoryIcon color="primary" fontSize="large" />
+                      </IconButton>
+                    </Tooltip>
                     <Typography variant="h6" color="primary" gutterBottom>
                       Total Part Count
                     </Typography>
@@ -606,19 +652,27 @@ const User = () => {
                   </Paper>
                 </Grid>
 
-                <Grid item xs={12} sm={4}>
+                <Grid item xs={12} sm={12} md={4}>
                   <Paper
                     sx={{
                       p: 2,
                       textAlign: "center",
-                      height: "100%",
+                      height: { xs: "auto", sm: "auto", md: "100%" },
                       display: "flex",
                       flexDirection: "column",
                       justifyContent: "center",
+                      mb: { xs: 2, sm: 2, md: 0 },
                     }}
                   >
-                    <IconButton sx={{ mb: 1 }}>
-                      <LocalShippingIcon color="primary" fontSize="large" />
+                    <IconButton
+                      sx={{
+                        mb: 1,
+                        borderRadius: "50%", 
+                        width: "56px", 
+                        height: "56px",
+                      }}
+                    >
+                      <BackpackIcon color="primary" fontSize="large" />
                     </IconButton>
                     <Typography variant="h6" color="primary" gutterBottom>
                       Current Part Packages
@@ -629,20 +683,38 @@ const User = () => {
                   </Paper>
                 </Grid>
 
-                <Grid item xs={12} sm={4}>
+                <Grid item xs={12} sm={12} md={4}>
                   <Paper
                     sx={{
                       p: 2,
                       textAlign: "center",
-                      height: "100%",
+                      height: { xs: "auto", sm: "auto", md: "100%" },
                       display: "flex",
                       flexDirection: "column",
                       justifyContent: "center",
                     }}
                   >
-                    <IconButton sx={{ mb: 1 }}>
-                      <LocalShippingIcon color="primary" fontSize="large" />
-                    </IconButton>
+                    <Tooltip title="Reset all package counts" arrow>
+                      <IconButton
+                        sx={{
+                          mb: 1,
+                          borderRadius: "50%",
+                          width: "56px", 
+                          height: "56px",
+                        }}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              "Are you sure you want to reset all counts?"
+                            )
+                          ) {
+                            handleResetAllCounts();
+                          }
+                        }}
+                      >
+                        <LocalShippingIcon color="primary" fontSize="large" />
+                      </IconButton>
+                    </Tooltip>
                     <Typography variant="h6" color="primary" gutterBottom>
                       Total Package Count
                     </Typography>

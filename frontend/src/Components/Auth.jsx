@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast, ToastContainer } from "react-toastify";
 
-
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import backgroundImage from "../assets/bgImage.jpg";
 import logoImage from "../assets/companyLogo.png";
 import { api } from "../apiConfig";
@@ -34,6 +33,14 @@ const Auth = () => {
       });
     }
   };
+
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.showToast) {
+      toast.success("Logged out successfully");
+    }
+  }, [location.state]);
 
   return (
     <div

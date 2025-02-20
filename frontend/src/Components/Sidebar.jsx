@@ -31,10 +31,12 @@ import Dashboard from "./Dashboard";
 import PartMaster from "./PartMaster";
 import PartTable from "./PartTable";
 import User from "./User";
+import { toast, Toaster } from "react-hot-toast";
 
 import { Button } from "@mui/material";
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import PackageTable from "./PackageTable";
+import LogoutIcon from "@mui/icons-material/Logout";
 
 const drawerWidth = 240;
 const primaryColor = "#448ee4";
@@ -118,9 +120,9 @@ function PersistentDrawerLeft() {
 
     const pathToMenuMap = {
       "/": "Dashboard",
-      "/part": "Part Master > Add",
-      "/part_Table": "Part Master > Table",
-      "/User": "User",
+      "/part": "🛠️ Part Master > Add",
+      "/part_Table": "🛠️ Part Master > Table",
+      "/User": "📦 Dispatch",
     };
 
     const currentMenu = pathToMenuMap[location.pathname];
@@ -255,6 +257,11 @@ function PersistentDrawerLeft() {
 
   const isUserRoute = location.pathname.toLowerCase() === "/user";
 
+  const handleLogout = () => {
+    toast.success("Logged Out Successfully");
+    navigate("/", { state: { showToast: true } });
+  };
+
   return (
     <Box sx={{ display: "flex", height: "100vh", overflow: "hidden" }}>
       <CssBaseline />
@@ -335,14 +342,15 @@ function PersistentDrawerLeft() {
             />
           </Box>
         </DrawerHeader>
-
         <Divider />
         <List>
           <ListItemWithTooltip tooltip="Dashboard">
             <ListItem disablePadding>
               <ListItemButton
                 selected={isActive("/dashboard")}
-                onClick={() => handleMenuClick("Dashboard", null, "/dashboard")}
+                onClick={() =>
+                  handleMenuClick("📊 Dashboard", null, "/dashboard")
+                }
                 sx={getMenuItemStyle(isActive("/dashboard"))}
               >
                 <ListItemIcon>
@@ -381,7 +389,7 @@ function PersistentDrawerLeft() {
                     selected={isActive("/part")}
                     sx={getDropdownStyle(isActive("/part"))}
                     onClick={() =>
-                      handleMenuClick("Part Master", "Add", "/part")
+                      handleMenuClick("🛠️ Part Master", "✙ Add", "/part")
                     }
                   >
                     <ListItemIcon>
@@ -398,7 +406,7 @@ function PersistentDrawerLeft() {
                     selected={isActive("/part_Table")}
                     sx={getDropdownStyle(isActive("/part_Table"))}
                     onClick={() =>
-                      handleMenuClick("Part Master", "Table", "/part_Table")
+                      handleMenuClick("🛠️ Part Master", "Table", "/part_Table")
                     }
                   >
                     <ListItemIcon>
@@ -411,11 +419,11 @@ function PersistentDrawerLeft() {
             </List>
           </Collapse>
 
-          <ListItemWithTooltip tooltip="User">
+          <ListItemWithTooltip tooltip="Dispatch">
             <ListItem disablePadding>
               <ListItemButton
                 selected={isActive("/User")}
-                onClick={() => handleMenuClick("User", null, "/User")}
+                onClick={() => handleMenuClick("📦 Dispatch", null, "/User")}
                 sx={getMenuItemStyle(isActive("/User"))}
               >
                 <ListItemIcon>
@@ -426,7 +434,6 @@ function PersistentDrawerLeft() {
             </ListItem>
           </ListItemWithTooltip>
         </List>
-
         <Divider />
         <Box
           sx={{
@@ -443,6 +450,25 @@ function PersistentDrawerLeft() {
             </IconButton>
           </Tooltip>
         </Box>
+        <Divider sx={{ marginY: 4 }} />
+        <ListItemWithTooltip tooltip="Logout">
+          <Button
+            onClick={handleLogout}
+            sx={{
+              position: "relative",
+              top: "-1rem",
+              display: "flex",
+              alignItems: "center",
+
+              color: "#448ee4",
+            }}
+          >
+            <LogoutIcon />
+            {open && (
+              <ListItemText primary="Logout" sx={{ color: "black", ml: -13 }} />
+            )}{" "}
+          </Button>
+        </ListItemWithTooltip>
       </Drawer>
 
       <Main open={open}>

@@ -143,6 +143,22 @@ const Dashboard = () => {
         pb: "64px",
         position: "relative",
         boxSizing: "border-box",
+        // Only apply scrolling styles for screens smaller than 'md' breakpoint
+        overflowY: {
+          xs: "auto",
+          sm: "auto",
+          md: "visible",
+        },
+        height: {
+          xs: "100vh",
+          sm: "100vh",
+          md: "auto",
+        },
+        WebkitOverflowScrolling: {
+          xs: "touch",
+          sm: "touch",
+          md: "auto",
+        },
       }}
     >
       <Container maxWidth="xl">

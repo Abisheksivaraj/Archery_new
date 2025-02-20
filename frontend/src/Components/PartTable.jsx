@@ -1,10 +1,16 @@
 import React, { useEffect, useState, useRef } from "react";
-
 import Box from "@mui/material/Box";
-
-
 import logoImage from "../assets/companyLogo.png";
-import { Modal, Button, TextField, Tooltip } from "@mui/material";
+import {
+  Modal,
+  Button,
+  TextField,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+} from "@mui/material";
 import { toast } from "react-toastify";
 import { QRCodeSVG } from "qrcode.react";
 import { api } from "../apiConfig";
@@ -64,6 +70,9 @@ const Table = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedPart, setSelectedPart] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteConfirmPartNo, setDeleteConfirmPartNo] = useState("");
+  const [partToDelete, setPartToDelete] = useState(null);
   const [updatedPart, setUpdatedPart] = useState({
     partName: "",
     partNo: "",
@@ -78,41 +87,41 @@ const Table = () => {
     printContent.innerHTML = printRef.current.innerHTML;
 
     const styles = `
-    @page {
-      size: 50mm 25mm;
-      margin: 0;
-    }
-    body {
-      margin: 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 25mm;
-    }
-    .print-content {
-      width: 50mm;
-      height: 25mm;
-      background-color: white;
-    }
-  `;
+      @page {
+        size: 50mm 25mm;
+        margin: 0;
+      }
+      body {
+        margin: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 25mm;
+      }
+      .print-content {
+        width: 50mm;
+        height: 25mm;
+        background-color: white;
+      }
+    `;
 
     const printWindow = window.open("", "", "height=500,width=800");
     printWindow.document.write(`
-    <html>
-      <head>
-        <style>${styles}</style>
-      </head>
-      <body>
-        ${printContent.innerHTML}
-        <script>
-          window.onload = function() {
-            window.print();
-            setTimeout(function() { window.close(); }, 250);
-          }
-        </script>
-      </body>
-    </html>
-  `);
+      <html>
+        <head>
+          <style>${styles}</style>
+        </head>
+        <body>
+          ${printContent.innerHTML}
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 250);
+            }
+          </script>
+        </body>
+      </html>
+    `);
     printWindow.document.close();
   };
 
@@ -162,17 +171,39 @@ const Table = () => {
     }
   };
 
-  const handleDelete = async (selectedPart) => {
+  const handleDeleteClick = (part) => {
+    setPartToDelete(part);
+    setDeleteDialogOpen(true);
+    setDeleteConfirmPartNo("");
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (deleteConfirmPartNo !== partToDelete.partNo) {
+      toast.error("Part number does not match. Please try again.", {
+        position: toast.POSITION.TOP_RIGHT,
+        autoClose: 3000,
+      });
+      // Close dialog even if part number doesn't match
+      setDeleteDialogOpen(false);
+      setPartToDelete(null);
+      setDeleteConfirmPartNo("");
+      return;
+    }
+
     try {
-      const response = await api.delete(`/deletePart/${selectedPart._id}`);
+      const response = await api.delete(`/deletePart/${partToDelete._id}`);
 
       if (response.status === 200) {
-        setParts(parts.filter((part) => part._id !== selectedPart._id));
+        // Update the parts list
+        setParts(parts.filter((part) => part._id !== partToDelete._id));
+
+        // Show success message
         toast.success("Part deleted successfully!", {
           position: toast.POSITION.TOP_RIGHT,
           autoClose: 3000,
         });
       } else {
+        // Show error message
         toast.error("Failed to delete part. Please try again.", {
           position: toast.POSITION.TOP_RIGHT,
           autoClose: 3000,
@@ -187,7 +218,18 @@ const Table = () => {
           autoClose: 3000,
         }
       );
+    } finally {
+      // Always close the dialog and reset states regardless of success or failure
+      setDeleteDialogOpen(false);
+      setPartToDelete(null);
+      setDeleteConfirmPartNo("");
     }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setPartToDelete(null);
+    setDeleteConfirmPartNo("");
   };
 
   return (
@@ -255,7 +297,7 @@ const Table = () => {
 
                       <Tooltip title="Delete">
                         <Button
-                          onClick={() => handleDelete(part)}
+                          onClick={() => handleDeleteClick(part)}
                           variant="contained"
                           style={{
                             backgroundColor: "#EF5350",
@@ -273,7 +315,7 @@ const Table = () => {
               </tbody>
             </table>
 
-            <div className="flex justify-between mt-4 ">
+            <div className="flex justify-between mt-4">
               <button
                 onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
@@ -297,7 +339,99 @@ const Table = () => {
           </div>
         )}
       </div>
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        PaperProps={{
+          style: {
+            backgroundColor: "#1A1A1A",
+            color: "#E0E0E0",
+            borderRadius: "4px",
+            padding: "24px",
+            width: "40rem",
+            border: "2px solid red",
+            boxShadow: "0 0 20px rgba(255, 215, 0, 0.1)",
+          },
+        }}
+      >
+        <DialogTitle className="text-center font-bold text-xl">
+          <div className="flex flex-col items-center border-b-2 border-yellow-500 pb-4">
+            <span className="text-yellow-500 text-3xl">⚠️</span>
+            <span className="mt-2 text-yellow-500">
+              WARNING: Part Deletion
+            </span>
+          </div>
+        </DialogTitle>
+        <DialogContent>
+          <div className="mt-4 text-center">
+            <p className="text-gray-300">
+              Please enter the part number to confirm deletion:
+            </p>
+            <p className="font-mono text-xl text-red-500 font-bold bg-black p-3 rounded border border-yellow-500">
+              "{partToDelete?.partNo}"
+            </p>
+            <TextField
+              autoFocus
+              margin="dense"
+              label="Enter Part Number"
+              type="text"
+              fullWidth
+              value={deleteConfirmPartNo}
+              onChange={(e) => setDeleteConfirmPartNo(e.target.value)}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "4px",
+                  backgroundColor: "#262626",
+                  color: "#E0E0E0",
+                  "& fieldset": { borderColor: "#404040" },
+                  "&:hover fieldset": { borderColor: "#FFD700" },
+                  "&.Mui-focused fieldset": { borderColor: "#FFD700" },
+                },
+                "& .MuiInputLabel-root": { color: "#808080" },
+                "& .MuiInputBase-input": { color: "#E0E0E0" },
+              }}
+              onKeyPress={(e) => {
+                if (e.key === "Enter" && deleteConfirmPartNo) {
+                  handleDeleteConfirm();
+                }
+              }}
+            />
+          </div>
+        </DialogContent>
+        <DialogActions className="flex justify-center gap-3 pb-4">
+          <Button
+            onClick={handleDeleteCancel}
+            variant="outlined"
+            sx={{
+              color: "#E0E0E0",
+              borderColor: "#404040",
+              "&:hover": { borderColor: "#FFD700", backgroundColor: "#262626" },
+              textTransform: "uppercase",
+              fontWeight: "bold",
+            }}
+          >
+            Cancel
+          </Button>
 
+          <Button
+            onClick={handleDeleteConfirm}
+            variant="contained"
+            disabled={!deleteConfirmPartNo}
+            sx={{
+              padding: "6px 16px",
+              backgroundColor: "#CC0000",
+              "&:hover": { backgroundColor: "#990000" },
+              "&:disabled": { backgroundColor: "#4D0000", color: "#808080" },
+              textTransform: "uppercase",
+              fontWeight: "bold",
+            }}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+      {/* Preview/Edit Modal */}
       <Modal
         open={selectedPart !== null}
         onClose={() => setSelectedPart(null)}
