@@ -8,7 +8,7 @@
 
 import axios from "axios";
 
-export const API_URL = "http://localhost:5555";
+export const API_URL = "https://archery-warehouse-backend.vercel.app";
 
 export const api = axios.create({
   baseURL: API_URL,
