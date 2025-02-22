@@ -1,13 +1,5 @@
 {
   "version": 2,
   "builds": [{ "src": "*.js", "use": "@vercel/node" }],
-  "routes": [
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/" }
-  ]
+  "routes": [{ "handle": "filesystem" }, { "src": "/(.*)", "dest": "/" }]
 }
-
-
-
-
-// mongodb+srv://abishek_2001:<db_password>@cluster-1.lj9xc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster-1
