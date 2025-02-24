@@ -23,7 +23,7 @@ const PrintLabel = ({ partNo, logoUrl }) => {
     height: "25mm",
     padding: "2mm",
     display: "flex",
-    alignItems: "center",
+    alignItems: "start",
     justifyContent: "space-between",
     backgroundColor: "white",
     border: "1px solid #ccc",
@@ -45,7 +45,7 @@ const PrintLabel = ({ partNo, logoUrl }) => {
         style={{
           display: "flex",
           flexDirection: "column",
-          alignItems: "center",
+          alignItems: "start",
         }}
       >
         <img
