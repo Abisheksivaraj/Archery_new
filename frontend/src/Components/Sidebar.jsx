@@ -37,6 +37,7 @@ import { Button } from "@mui/material";
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import PackageTable from "./PackageTable";
 import LogoutIcon from "@mui/icons-material/Logout";
+import { FaBoxOpen } from "react-icons/fa";
 
 const drawerWidth = 240;
 const primaryColor = "#448ee4";
@@ -427,9 +428,9 @@ function PersistentDrawerLeft() {
                 sx={getMenuItemStyle(isActive("/User"))}
               >
                 <ListItemIcon>
-                  <PersonIcon />
+                  <FaBoxOpen />
                 </ListItemIcon>
-                {open && <ListItemText primary="User" />}
+                {open && <ListItemText primary="Dispatch" />}
               </ListItemButton>
             </ListItem>
           </ListItemWithTooltip>
