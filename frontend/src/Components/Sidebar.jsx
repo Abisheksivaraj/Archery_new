@@ -428,7 +428,7 @@ function PersistentDrawerLeft() {
                 sx={getMenuItemStyle(isActive("/User"))}
               >
                 <ListItemIcon>
-                  <FaBoxOpen />
+                  <FaBoxOpen className="text-4xl h-[3rem] w-[4rem]" />
                 </ListItemIcon>
                 {open && <ListItemText primary="Dispatch" />}
               </ListItemButton>
