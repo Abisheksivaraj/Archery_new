@@ -83,46 +83,58 @@ const Table = () => {
   const partsPerPage = 4;
 
   const handlePrint = () => {
-    const printContent = document.createElement("div");
-    printContent.innerHTML = printRef.current.innerHTML;
+    // Get the part number from the selected part
+    const partNo = selectedPart?.partNo || "ABC123";
 
-    const styles = `
-      @page {
-        size: 50mm 25mm;
-        margin: 0;
-      }
-      body {
-        margin: 0;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 25mm;
-      }
-      .print-content {
-        width: 50mm;
-        height: 25mm;
-        background-color: white;
-      }
-    `;
+    // Create ZPL code with the actual part number
+    const zplCode = `^XA
+^FO10,10^GFA,1000,1000,10,,:::::::::::::::::::::::::::N01FFC,M07FFFE,L01FFFFF,L07FFFFCM01F8,K01FFFE7M07FE,K03FF83CN0FFF,K0FF8N01FFF8,J03FEN03FFFC,J07F8N07FFFE,J0FEM01FFFFF,I03F8M03FFFF9E,I07EM01FFFF87F,I0F8N0FFFE01F8,I1EM07FFF807F8,I3CN0FFFE00FF8,I78M07FFF803FF8,I7N0FFFE01FFF8,IEM03FFF01FFFF8,I8M0FFFC0FFFFF,J07FFFC7FFFF,J0FFFFFFFFE,J1FFFFFFFFF,J1FFFFFFFFF,J3FFFFFFFFF8,J3FFFFFFFFFC,J3FFFFFFFFFC,J3FFFFFFFFFE,J3FFFFFFFFE,J3FFFFFFFFE,J3FFFFFFFFE,J3FFFFFFFFE,J1FFFFFFFFE,J1FFFFFFFFC,J1FFFFFFFF,K0FFFFFFFE,K03FFFFF8,L01FFE,::^FS
+^FO150,10^A0N,30,30^FDPART NO: ${partNo}^FS
+^FO10,50^BQN,2,5^FDMA,https://example.com/part/${partNo}^FS
+^FO150,50^A0N,20,20^FDScan QR for details^FS
+^XZ`;
 
-    const printWindow = window.open("", "", "height=500,width=800");
-    printWindow.document.write(`
-      <html>
-        <head>
-          <style>${styles}</style>
-        </head>
-        <body>
-          ${printContent.innerHTML}
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 250);
-            }
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+    try {
+      // Send to printer via API
+      api
+        .post("/print-label", {
+          zplCode: zplCode,
+          printer: "HPRT HT330-ZPL",
+          partNo: partNo,
+        })
+        .then((response) => {
+          toast.success("Label sent to printer successfully!");
+        })
+        .catch((error) => {
+          console.error("Error sending to printer:", error);
+          toast.error("Failed to send to printer");
+          // Fall back to client-side printing if API fails
+          clientSidePrint(zplCode, partNo);
+        });
+    } catch (error) {
+      console.error("Error in print process:", error);
+      toast.error("Printing failed. Please try again.");
+      // Fall back to client-side printing
+      clientSidePrint(zplCode, partNo);
+    }
+  };
+
+  // Helper function for client-side printing
+  const clientSidePrint = (zplCode, partNo) => {
+    // Create a Blob with the ZPL code
+    const blob = new Blob([zplCode], { type: "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+
+    // Create a hidden link and trigger download/print
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `label-${partNo || "unknown"}.prn`;
+
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("PRN file downloaded. Please send it to your printer");
   };
 
   useEffect(() => {
