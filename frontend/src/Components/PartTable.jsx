@@ -270,7 +270,7 @@ const Table = () => {
                           onClick={() => handlePreview(part)}
                           variant="contained"
                           style={{
-                            backgroundColor: "#AFDBFF",
+                            backgroundColor: "white",
                             color: "white",
                             padding: "8px 16px",
                             borderRadius: "8px",
@@ -285,7 +285,7 @@ const Table = () => {
                           onClick={() => handleEdit(part)}
                           variant="contained"
                           style={{
-                            backgroundColor: "#5FD797",
+                            backgroundColor: "white",
                             color: "white",
                             padding: "8px 16px",
                             borderRadius: "8px",
@@ -300,7 +300,7 @@ const Table = () => {
                           onClick={() => handleDeleteClick(part)}
                           variant="contained"
                           style={{
-                            backgroundColor: "#EF5350",
+                            backgroundColor: "white",
                             color: "white",
                             padding: "8px 16px",
                             borderRadius: "8px",
