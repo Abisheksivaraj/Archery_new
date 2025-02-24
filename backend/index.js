@@ -5,7 +5,7 @@ const app = express();
 
 app.use(express.json());
 
-// Configure CORS with specific origin and methods
+
 app.use(
   cors({
     origin: "http://localhost:5173", // Allow requests from this origin
@@ -15,7 +15,7 @@ app.use(
   })
 );
 
-// Explicitly handle preflight (OPTIONS) requests
+
 app.options("*", cors());
 
 // Welcome route
