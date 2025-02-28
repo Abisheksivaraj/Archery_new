@@ -8,11 +8,15 @@ import {
   Card,
   CardContent,
   CardMedia,
+  FormControl,
+  FormLabel,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
 } from "@mui/material";
 import QRCode from "qrcode";
 import logo from "../assets/companyLogo.png";
 import { Toaster, toast } from "react-hot-toast";
-
 import { api } from "../apiConfig";
 
 const PartMaster = () => {
@@ -20,6 +24,7 @@ const PartMaster = () => {
     partNo: "",
     partName: "",
     quantity: "",
+    labelSize: "",
   });
 
   const [currentPart, setCurrentPart] = useState(null);
@@ -30,7 +35,7 @@ const PartMaster = () => {
 
   const generateQRCode = async (part) => {
     try {
-      const qrData = `Part No: ${part.partNo}, Part Name: ${part.partName}, Quantity: ${part.quantity}`;
+      const qrData = `Part No: ${part.partNo}, Part Name: ${part.partName}, Quantity: ${part.quantity}, Label Size: ${part.labelSize}`;
       const url = await QRCode.toDataURL(qrData);
       return url;
     } catch (err) {
@@ -51,23 +56,23 @@ const PartMaster = () => {
     e.preventDefault();
 
     try {
-      if (!formData.partNo || !formData.partName || !formData.quantity) {
+      if (
+        !formData.partNo ||
+        !formData.partName ||
+        !formData.quantity ||
+        !formData.labelSize
+      ) {
         toast.error("All fields are required.");
         return;
       }
 
-      const response = await api.post("/addPart", {
-        partName: formData.partName,
-        partNo: formData.partNo,
-        quantity: formData.quantity,
-      });
+      const response = await api.post("/addPart", formData);
       toast.success(response.data.message);
 
       const qrCode = await generateQRCode(formData);
-
       setCurrentPart({ ...formData, qrCode });
 
-      setFormData({ partNo: "", partName: "", quantity: "" });
+      setFormData({ partNo: "", partName: "", quantity: "", labelSize: "" });
     } catch (error) {
       const errorMessage =
         error.response?.data?.message || "An unexpected error occurred.";
@@ -76,27 +81,17 @@ const PartMaster = () => {
   };
 
   return (
-    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 3, }}>
+    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
       <Toaster position="top-right" reverseOrder={false} />
       <Card
         elevation={4}
         sx={{
-          width: "40%",
+          width: { xs: "40vh", sm: "50vh", md: "80vh" },
           p: 4,
           mx: "auto",
           borderRadius: 3,
           backgroundColor: "#f8f9fa",
           boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.2)",
-          width: {
-            xs: "40vh",
-            sm: "50vh",
-            md:"80vh"
-          },
-          WebkitOverflowScrolling: {
-            xs: "touch",
-            sm: "touch",
-            md: "auto",
-          },
         }}
       >
         <Typography
@@ -123,11 +118,6 @@ const PartMaster = () => {
                 onChange={handleChange}
                 required
                 variant="outlined"
-                sx={{
-                  "& .MuiOutlinedInput-root": {
-                    borderRadius: 2,
-                  },
-                }}
               />
             </Grid>
             <Grid item xs={12}>
@@ -139,11 +129,6 @@ const PartMaster = () => {
                 onChange={handleChange}
                 required
                 variant="outlined"
-                sx={{
-                  "& .MuiOutlinedInput-root": {
-                    borderRadius: 2,
-                  },
-                }}
               />
             </Grid>
             <Grid item xs={12}>
@@ -156,14 +141,33 @@ const PartMaster = () => {
                 onChange={handleChange}
                 required
                 variant="outlined"
-                sx={{
-                  "& .MuiOutlinedInput-root": {
-                    borderRadius: 2,
-                  },
-                }}
               />
             </Grid>
-            <Grid item xs={12}>
+            <Grid item xs={12} sx={{ mt: -1 }}>
+              <FormControl>
+                <FormLabel id="label-size-group-label">Label Size</FormLabel>
+                <RadioGroup
+                  row // This makes the radio buttons appear in a row
+                  aria-labelledby="label-size-group-label"
+                  name="labelSize"
+                  value={formData.labelSize}
+                  onChange={handleChange} // Ensures state updates correctly
+                >
+                  <FormControlLabel
+                    value="4 inch"
+                    control={<Radio />}
+                    label="4 inch"
+                  />
+                  <FormControlLabel
+                    value="6 inch"
+                    control={<Radio />}
+                    label="6 inch"
+                  />
+                </RadioGroup>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} sx={{ mt: -3 }}>
               <Button
                 type="submit"
                 variant="contained"
@@ -224,9 +228,7 @@ const PartMaster = () => {
                 borderRadius: 2,
                 boxShadow: "0 4px 10px rgba(0,0,0,0.1)",
                 transition: "transform 0.2s ease-in-out",
-                "&:hover": {
-                  transform: "scale(1.05)",
-                },
+                "&:hover": { transform: "scale(1.05)" },
               }}
             >
               <CardContent
@@ -245,11 +247,7 @@ const PartMaster = () => {
                   component="img"
                   image={logo}
                   alt="Company Logo"
-                  sx={{
-                    width: "20mm",
-                    height: "15mm",
-                    objectFit: "contain",
-                  }}
+                  sx={{ width: "20mm", height: "15mm", objectFit: "contain" }}
                 />
                 <Box
                   sx={{

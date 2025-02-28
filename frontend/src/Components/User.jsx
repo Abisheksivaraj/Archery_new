@@ -35,97 +35,166 @@ import InventoryIcon from "@mui/icons-material/Inventory";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import BackpackIcon from "@mui/icons-material/Backpack";
 
-const PartLabel = ({ partNo, logoUrl, partName, quantity }) => {
+const ShippingLabel = ({
+  partNo,
+  logoUrl,
+  partName,
+  quantity,
+  sender,
+  receiver,
+}) => {
+  const [labelSize, setLabelSize] = useState("");
+
+  const fetchLabelSize = async () => {
+    try {
+      console.log("Fetching label size for partNo:", partNo);
+
+      const response = await api.get(`/getLabelSize/${partNo}`);
+      console.log("API Response:", response.data); // Log API response
+
+      const sizeInInchesStr = response.data.labelSize; // e.g., "4 inch" or "6 inch"
+      console.log("Label Size (String):", sizeInInchesStr);
+
+      // Extract the numeric value from the string
+      const inches = parseInt(sizeInInchesStr);
+      console.log("Label Size (Parsed Inches):", inches);
+
+      // Set width based on the label size
+      let width;
+      if (inches === 4) {
+        width = 100; // 4-inch label: fixed width of 100mm
+      } else if (inches === 6) {
+        width = 150; // 6-inch label: fixed width of 150mm (adjust if needed)
+      } else {
+        // Fallback in case the value is something else
+        width = 100;
+      }
+
+      // Calculate the height in millimeters (1 inch = 25.4 mm)
+      const height = inches * 25.4;
+
+      console.log("Final Label Size:", {
+        width: `${width}mm`,
+        height: `${height}mm`,
+      });
+
+      setLabelSize({ width: `${width}mm`, height: `${height}mm` });
+    } catch (error) {
+      console.error("Error fetching label size:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchLabelSize();
+  }, [partNo]);
+
+  const generateTrackingNumber = () => {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let trackingNumber = "";
+    for (let i = 0; i < 10; i++) {
+      trackingNumber += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return trackingNumber;
+  };
+
+  const [trackingNo, setTrackingNo] = useState("");
+
+  useEffect(() => {
+    setTrackingNo(generateTrackingNumber());
+  }, []);
+
   const qrCodeValue = JSON.stringify({
     partNo,
     partName,
     quantity,
+    trackingNo,
   });
 
   const labelStyle = {
-    width: "100mm",
-    height: "50mm",
+    width: labelSize.width,
+    height: labelSize.height,
     padding: "6mm",
     backgroundColor: "white",
-    border: "1px solid #ccc",
+    border: "1px solid black",
     boxSizing: "border-box",
     margin: "0 auto",
-    position: "relative",
     display: "flex",
     flexDirection: "column",
+    fontSize: "3.5mm",
+    fontFamily: "Arial, sans-serif",
   };
 
-  const contentContainerStyle = {
-    width: "100%",
+  const sectionStyle = {
+    borderBottom: "1px dashed black",
+    paddingBottom: "3mm",
+    marginBottom: "3mm",
+  };
+
+  const contentStyle = {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: "2mm",
-    height: "calc(100% - 12mm)",
-  };
-
-  const textContainerStyle = {
-    width: "70%",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-around",
-    overflow: "hidden",
-  };
-
-  const textStyle = {
-    margin: 0,
-    fontSize: "3.5mm",
-    color: "black",
-    fontWeight: "500",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  };
-
-  const qrCodeContainerStyle = {
-    width: "25%",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
   };
 
   return (
     <div style={labelStyle} className="print-content">
-      <img
-        src={logoUrl}
-        alt="Company Logo"
-        style={{
-          width: "25mm",
-          height: "10mm",
-          objectFit: "contain",
-          alignSelf: "center",
-        }}
-      />
+      {/* Logo Section */}
+      <div style={{ textAlign: "center" }}>
+        <img
+          src={logoUrl}
+          alt="Company Logo"
+          style={{ width: "full", height: "12mm", objectFit: "contain" }}
+        />
+      </div>
 
-      <div style={contentContainerStyle}>
-        <div style={textContainerStyle}>
-          <p style={textStyle}>
-            PartName: <strong>{partName}</strong>
-          </p>
-          <p style={textStyle}>
-            PartNo: <strong>{partNo}</strong>
-          </p>
-          <p style={textStyle}>
-            Packing Quantity: <strong>{quantity}</strong>
+      {/* Sender Details */}
+      <div style={sectionStyle}>
+        <strong>From:</strong>
+        <p style={{ margin: 0 }}>{sender.name}</p>
+        <p style={{ margin: 0 }}>{sender.address}</p>
+      </div>
+
+      {/* Receiver Details */}
+      <div style={sectionStyle}>
+        <strong>To:</strong>
+        <p style={{ margin: 0 }}>{receiver.name}</p>
+        <p style={{ margin: 0 }}>{receiver.address}</p>
+      </div>
+
+      {/* Item Details */}
+      <div style={sectionStyle}>
+        <p style={{ margin: "2mm 0" }}>
+          Part Name: <strong>{partName}</strong>
+        </p>
+        <p style={{ margin: "2mm 0" }}>
+          Part No: <strong>{partNo}</strong>
+        </p>
+        <p style={{ margin: "2mm 0" }}>
+          Packing Quantity: <strong>{quantity}</strong>
+        </p>
+      </div>
+
+      {/* Tracking and QR Code */}
+      <div style={contentStyle}>
+        <div>
+          <p style={{ margin: "2mm 0" }}>
+            Tracking No: <strong>{trackingNo}</strong>
           </p>
         </div>
-
-        <div style={qrCodeContainerStyle}>
-          <QRCodeSVG
-            value={qrCodeValue}
-            size={100}
-            level="M"
-            style={{ margin: 0 }}
-          />
-        </div>
+        <QRCodeSVG value={qrCodeValue} size={80} level="M" />
       </div>
     </div>
   );
+};
+
+// Example Usage
+const senderInfo = {
+  name: "ARCHERY TECHNOCRATS PRIVATE LIMITED",
+  address: "275/11, Ganshi Road, West Tambaram, Chennai, Tamil Nadu - 600045",
+};
+
+const receiverInfo = {
+  name: "John Doe",
+  address: "123 Industrial Area, Mumbai, Maharashtra - 400001",
 };
 
 const CustomAlert = ({ title, message, type }) => (
@@ -384,7 +453,6 @@ const User = () => {
     }
   };
 
-
   const handleResetAllCounts = async () => {
     try {
       const response = await api.post("/deleteAllCounts");
@@ -434,20 +502,22 @@ const User = () => {
       <Box sx={{ height: "10vh" }}>
         <Container maxWidth="lg" sx={{ height: "10%" }}>
           <Box sx={{ display: "none" }}>
-            <PartLabel
+            <ShippingLabel
               partNo={selectedPartNo}
               logoUrl={logoIcon}
               partName={selectedPart.partName}
               quantity={selectedPart.quantity}
+              sender={senderInfo}
+              receiver={receiverInfo}
             />
           </Box>
 
           <Grid container spacing={2} sx={{ height: "10%" }}>
             <Grid
               item
-              xs={12} // Full width on xs
-              sm={6} // Full width on sm
-              md={6} // Half width on md and up
+              xs={12}
+              sm={6}
+              md={6}
               sx={{ mb: { xs: 2, sm: 2, md: 0 } }}
             >
               <Paper sx={{ p: 2, height: "100%" }}>
@@ -628,8 +698,8 @@ const User = () => {
                       <IconButton
                         sx={{
                           mb: 1,
-                          borderRadius: "100%", 
-                          width: "56px", 
+                          borderRadius: "100%",
+                          width: "56px",
                           height: "56px",
                         }}
                         onClick={() => {
@@ -667,8 +737,8 @@ const User = () => {
                     <IconButton
                       sx={{
                         mb: 1,
-                        borderRadius: "50%", 
-                        width: "56px", 
+                        borderRadius: "50%",
+                        width: "56px",
                         height: "56px",
                       }}
                     >
@@ -699,7 +769,7 @@ const User = () => {
                         sx={{
                           mb: 1,
                           borderRadius: "50%",
-                          width: "56px", 
+                          width: "56px",
                           height: "56px",
                         }}
                         onClick={() => {

@@ -1,1 +1,13 @@
 @import "tailwindcss";
+
+@media print {
+  .print-container {
+    display: flex;
+    flex-wrap: wrap;
+    page-break-after: always;
+  }
+
+  .print-label {
+    page-break-inside: avoid;
+  }
+}

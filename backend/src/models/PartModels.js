@@ -13,6 +13,11 @@ const partSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  labelSize: {
+    type: String,
+    required: true,
+    enum: ["4 inch", "6 inch"],
+  },
 
   createdAt: {
     type: Date,

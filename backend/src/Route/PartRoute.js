@@ -4,9 +4,9 @@ const Part = require("../models/PartModels");
 
 route.post("/addPart", async (req, res) => {
   try {
-    const { partName, partNo, quantity } = req.body;
+    const { partName, partNo, quantity, labelSize } = req.body;
 
-    if (!partName || !partNo || !quantity) {
+    if (!partName || !partNo || !quantity || !labelSize) {
       return res.status(400).json({ message: "Enter the missing fields" });
     }
 
@@ -19,6 +19,7 @@ route.post("/addPart", async (req, res) => {
       partName,
       partNo,
       quantity,
+      labelSize,
     });
 
     await newPart.save();
@@ -27,6 +28,18 @@ route.post("/addPart", async (req, res) => {
   } catch (error) {
     console.error("Error adding part:", error);
     res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+route.get("/getLabelSize/:partNo", async (req, res) => {
+  try {
+    const label = await Part.findOne({ partNo: req.params.partNo });
+    if (!label) {
+      return res.status(404).json({ error: "Part No not found" });
+    }
+    res.json({ labelSize: label.labelSize });
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -79,8 +92,6 @@ route.put("/editPart/:id", async (req, res) => {
   }
 });
 
-
-
 route.delete("/deletePart/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -99,6 +110,5 @@ route.delete("/deletePart/:id", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
-
 
 module.exports = route;
