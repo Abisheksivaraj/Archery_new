@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef } from "react";
-// import { toast } from "react-toastify";
 import { toast, Toaster } from "react-hot-toast";
 import logoIcon from "../assets/companyLogo.png";
 import { QRCodeSVG } from "qrcode.react";
@@ -8,12 +7,7 @@ import {
   Alert,
   AlertTitle,
   Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
   Container,
-  Divider,
   FormControl,
   Grid,
   IconButton,
@@ -22,7 +16,6 @@ import {
   MenuItem,
   Paper,
   Select,
-  Stack,
   TextField,
   Tooltip,
   Typography,
@@ -34,6 +27,9 @@ import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import InventoryIcon from "@mui/icons-material/Inventory";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import BackpackIcon from "@mui/icons-material/Backpack";
+import Barcode from "react-barcode";
+import matrix from "../assets/dataMatrix.gif"
+import pdf417 from "../assets/pdf417.gif";
 
 const ShippingLabel = ({
   partNo,
@@ -42,8 +38,14 @@ const ShippingLabel = ({
   quantity,
   sender,
   receiver,
+  refreshTrackingNumbers,
 }) => {
-  const [labelSize, setLabelSize] = useState("");
+  const [orderNo, setOrderNo] = useState("");
+  const [trackingNo, setTrackingNo] = useState("");
+  const [labelSize, setLabelSize] = useState({
+    width: "100mm",
+    height: "100mm",
+  });
 
   const fetchLabelSize = async () => {
     try {
@@ -55,22 +57,18 @@ const ShippingLabel = ({
       const sizeInInchesStr = response.data.labelSize; // e.g., "4 inch" or "6 inch"
       console.log("Label Size (String):", sizeInInchesStr);
 
-      // Extract the numeric value from the string
       const inches = parseInt(sizeInInchesStr);
       console.log("Label Size (Parsed Inches):", inches);
 
-      // Set width based on the label size
       let width;
       if (inches === 4) {
-        width = 100; // 4-inch label: fixed width of 100mm
+        width = 100;
       } else if (inches === 6) {
-        width = 150; // 6-inch label: fixed width of 150mm (adjust if needed)
+        width = 150;
       } else {
-        // Fallback in case the value is something else
         width = 100;
       }
 
-      // Calculate the height in millimeters (1 inch = 25.4 mm)
       const height = inches * 25.4;
 
       console.log("Final Label Size:", {
@@ -88,113 +86,221 @@ const ShippingLabel = ({
     fetchLabelSize();
   }, [partNo]);
 
-  const generateTrackingNumber = () => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let trackingNumber = "";
-    for (let i = 0; i < 10; i++) {
-      trackingNumber += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return trackingNumber;
-  };
-
-  const [trackingNo, setTrackingNo] = useState("");
-
   useEffect(() => {
+    setOrderNo(generateOrderNumber());
     setTrackingNo(generateTrackingNumber());
-  }, []);
+  }, [partNo, refreshTrackingNumbers]);
 
   const qrCodeValue = JSON.stringify({
     partNo,
     partName,
     quantity,
     trackingNo,
+    orderNo,
+    timestamp: new Date().toISOString(),
   });
 
+  const barcodeValue = JSON.stringify({
+    quantity,
+  });
+
+  // Container style to ensure border is clearly visible
+  const containerStyle = {
+    padding: "10mm", // Add padding around the label to make sure border is not at the edge
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    pageBreakInside: "avoid",
+  };
+
+  // Updated label style with clearer border
   const labelStyle = {
     width: labelSize.width,
     height: labelSize.height,
-    padding: "6mm",
     backgroundColor: "white",
-    border: "1px solid black",
     boxSizing: "border-box",
-    margin: "0 auto",
     display: "flex",
     flexDirection: "column",
-    fontSize: "3.5mm",
+    fontSize: "3mm",
     fontFamily: "Arial, sans-serif",
+    position: "relative",
+    border: "3px solid black", // Thicker border for better visibility
+    padding: "8mm", // Internal padding to prevent content from touching the border
+    margin: "0",
+    pageBreakInside: "avoid",
+    boxShadow: "0 0 5px rgba(0,0,0,0.1)", // Subtle shadow to make border stand out
   };
 
   const sectionStyle = {
-    borderBottom: "1px dashed black",
+    borderBottom: "1px solid #000",
     paddingBottom: "3mm",
     marginBottom: "3mm",
   };
 
-  const contentStyle = {
+  const flexContainerWithBorder = {
     display: "flex",
     justifyContent: "space-between",
+    borderBottom: "1px solid #000",
+    paddingBottom: "3mm",
+    marginBottom: "3mm",
   };
 
+  const dividerStyle = {
+    borderLeft: "1px solid #000",
+    marginLeft: "3mm",
+    paddingLeft: "3mm",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
+
+  const addressQr = `${sender.name}, ${sender.address}`;
+
   return (
-    <div style={labelStyle} className="print-content">
-      {/* Logo Section */}
-      <div style={{ textAlign: "center" }}>
-        <img
-          src={logoUrl}
-          alt="Company Logo"
-          style={{ width: "full", height: "12mm", objectFit: "contain" }}
-        />
-      </div>
-
-      {/* Sender Details */}
-      <div style={sectionStyle}>
-        <strong>From:</strong>
-        <p style={{ margin: 0 }}>{sender.name}</p>
-        <p style={{ margin: 0 }}>{sender.address}</p>
-      </div>
-
-      {/* Receiver Details */}
-      <div style={sectionStyle}>
-        <strong>To:</strong>
-        <p style={{ margin: 0 }}>{receiver.name}</p>
-        <p style={{ margin: 0 }}>{receiver.address}</p>
-      </div>
-
-      {/* Item Details */}
-      <div style={sectionStyle}>
-        <p style={{ margin: "2mm 0" }}>
-          Part Name: <strong>{partName}</strong>
-        </p>
-        <p style={{ margin: "2mm 0" }}>
-          Part No: <strong>{partNo}</strong>
-        </p>
-        <p style={{ margin: "2mm 0" }}>
-          Packing Quantity: <strong>{quantity}</strong>
-        </p>
-      </div>
-
-      {/* Tracking and QR Code */}
-      <div style={contentStyle}>
-        <div>
-          <p style={{ margin: "2mm 0" }}>
-            Tracking No: <strong>{trackingNo}</strong>
-          </p>
+    <div style={containerStyle} className="print-container">
+      <div style={labelStyle} className="print-content">
+        {/* Logo section */}
+        <div style={{ ...sectionStyle, textAlign: "center" }}>
+          <img
+            src={logoUrl}
+            alt="Company Logo"
+            style={{ height: "12mm", objectFit: "contain" }}
+          />
         </div>
-        <QRCodeSVG value={qrCodeValue} size={80} level="M" />
+
+        <div style={flexContainerWithBorder}>
+          <div style={{ width: "70%" }}>
+            <strong>From:</strong>
+            <div>{sender.name}</div>
+            <div>{sender.address}</div>
+          </div>
+          <div style={dividerStyle}>
+            <img src={matrix} alt="" />
+          </div>
+        </div>
+
+        {/* To and shipping info section */}
+        <div style={flexContainerWithBorder}>
+          <div style={{ width: "60%" }}>
+            <strong>To:</strong>
+            <div>{receiver.name}</div>
+            <div>{receiver.address}</div>
+          </div>
+          <div style={dividerStyle}>
+            <div>
+              <div>
+                <strong>Ship Date:</strong>
+                <p>
+                  {new Date().toLocaleDateString("en-US", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </p>
+              </div>
+              <div>
+                <strong>Act weight:</strong> 25 Kg
+              </div>
+              <div>CAD 1319865X2NJX2</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Order info section */}
+        <div
+          style={{
+            ...sectionStyle,
+            display: "flex",
+            justifyContent: "space-between",
+          }}
+        >
+          <div
+            style={{
+              borderRight: "1px solid #000",
+              paddingRight: "3mm",
+              width: "33%",
+            }}
+          >
+            <strong>Order No:</strong> <span>{orderNo}</span>
+          </div>
+          <div
+            style={{
+              borderRight: "1px solid #000",
+              paddingRight: "3mm",
+              paddingLeft: "3mm",
+              width: "33%",
+              textAlign: "center",
+            }}
+          >
+            <strong>Reference No:</strong> {trackingNo}
+          </div>
+          <div style={{ paddingLeft: "3mm", width: "33%", textAlign: "right" }}>
+            <strong>Net weight:</strong>
+            25 Kg/Box
+          </div>
+        </div>
+
+        <div
+          style={{
+            textAlign: "center",
+            marginTop: "auto",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <div style={{ width: "30%" }}>
+            <QRCodeSVG value={addressQr} size={80} level="M" />
+          </div>
+          <div>
+            <img src={pdf417} alt="" />
+          </div>
+          <div style={{ width: "30%" }} className="flex flex-col items-center">
+            <p
+              className="mb-2 text-center"
+              style={{
+                transform: "rotate(270deg)",
+              }}
+            >
+              Quantity
+            </p>
+            <div
+              style={{
+                width: "150px",
+                height: "40px",
+                overflow: "hidden",
+                transform: "rotate(90deg)",
+              }}
+            >
+              <Barcode value={barcodeValue} />
+            </div>
+          </div>
+        </div>
+        <p
+          style={{ textAlign: "center", fontWeight: "bold", marginTop: "5mm" }}
+        >
+          All Observed rights by ATPL
+        </p>
       </div>
     </div>
   );
 };
 
-// Example Usage
-const senderInfo = {
-  name: "ARCHERY TECHNOCRATS PRIVATE LIMITED",
-  address: "275/11, Ganshi Road, West Tambaram, Chennai, Tamil Nadu - 600045",
+
+
+
+// Add these functions since they're referenced in ShippingLabel
+const generateOrderNumber = () => {
+  return Math.floor(10000 + Math.random() * 90000).toString(); // Ensures exactly 5 digits
 };
 
-const receiverInfo = {
-  name: "John Doe",
-  address: "123 Industrial Area, Mumbai, Maharashtra - 400001",
+const generateTrackingNumber = () => {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let trackingNumber = "";
+  for (let i = 0; i < 8; i++) {
+    trackingNumber += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return trackingNumber + Date.now().toString().slice(-4); // Unique 12-digit tracking number
 };
 
 const CustomAlert = ({ title, message, type }) => (
@@ -212,14 +318,14 @@ const CustomAlert = ({ title, message, type }) => (
   </Alert>
 );
 
-const showAlert = (title, message, type) => {
-  toast.custom(
-    (t) => <CustomAlert title={title} message={message} type={type} />,
-    {
-      duration: 4000,
-      position: "top-right",
-    }
-  );
+const senderInfo = {
+  name: "ARCHERY TECHNOCRATS PRIVATE LIMITED",
+  address: "275/11, Ganshi Road, West Tambaram, Chennai, Tamil Nadu - 600045",
+};
+
+const receiverInfo = {
+  name: "Honeywell Industrial Automation",
+  address: "855 S, Mint StCharlotte , NC 28202, 800-582-4263",
 };
 
 const User = () => {
@@ -230,6 +336,7 @@ const User = () => {
   const [selectedPart, setSelectedPart] = useState({
     partName: "",
     quantity: "",
+    packageCount: 0,
   });
   const [scanQuantity, setScanQuantity] = useState("");
   const [scannedQuantity, setScannedQuantity] = useState(0);
@@ -237,7 +344,7 @@ const User = () => {
   const [totalPartCount, setTotalPartCount] = useState(0);
   const [totalPackageCount, setTotalPackageCount] = useState(0);
   const [previousScanQuantity, setPreviousScanQuantity] = useState("");
-  const [deleteType, setDeleteType] = useState("");
+  const [trackingRefresh, setTrackingRefresh] = useState(0);
 
   const scanQuantityRef = useRef(null);
 
@@ -339,42 +446,48 @@ const User = () => {
   }, []);
 
   const handlePrint = () => {
-    const printWindow = window.open("", "_blank");
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Print Label</title>
-          <style>
-            @page {
-              size: 100mm 50mm;
-              margin: 0;
-            }
-            body {
-              margin: 0;
-              padding: 0;
-            }
-            #print-content {
-              width: 100%;
-              height: 100%;
-            }
-          </style>
-        </head> 
-        <body>
-          <div id="print-content">
-            ${document.querySelector(".print-content").outerHTML}
-          </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              window.onafterprint = function() {
-                window.close();
+    // Regenerate tracking numbers before printing
+    setTrackingRefresh((prev) => prev + 1);
+
+    // Small delay to ensure new tracking numbers are set before printing
+    setTimeout(() => {
+      const printWindow = window.open("", "_blank");
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Print Label</title>
+            <style>
+              @page {
+                size: 100mm 150mm;
+                margin: 0;
+              }
+              body {
+                margin: 0;
+                padding: 0;
+              }
+              #print-content {
+                width: 100%;
+                height: 100%;
+              }
+            </style>
+          </head> 
+          <body>
+            <div id="print-content">
+              ${document.querySelector(".print-content").outerHTML}
+            </div>
+            <script>
+              window.onload = function() {
+                window.print();
+                window.onafterprint = function() {
+                  window.close();
+                };
               };
-            };
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }, 100);
   };
 
   const handlePartNoChange = (e) => {
@@ -390,10 +503,21 @@ const User = () => {
       setSelectedPart({
         partName: part.partName,
         quantity: part.quantity,
+        packageCount: 0,
       });
 
-      showAlert(
-        `Once the scan quantity reaches  ${part.quantity}, the label will be automatically printed.`
+      toast.custom(
+        (t) => (
+          <CustomAlert
+            title="Scan Information"
+            message={`Once the scan quantity reaches ${part.quantity}, the label will be automatically printed.`}
+            type="info"
+          />
+        ),
+        {
+          duration: 4000,
+          position: "top-right",
+        }
       );
 
       fetchPartPackageCount(value);
@@ -432,6 +556,9 @@ const User = () => {
 
           await savePackageData();
           setScannedQuantity(0);
+
+          // Generate new tracking numbers and print
+          setTrackingRefresh((prev) => prev + 1);
           setTimeout(() => {
             handlePrint();
           }, 100);
@@ -456,7 +583,7 @@ const User = () => {
   const handleResetAllCounts = async () => {
     try {
       const response = await api.post("/deleteAllCounts");
-      if (response.data.counts) {
+      if (response.data.success) {
         setTotalPartCount(0);
         setTotalPackageCount(0);
         toast.success("All counts reset successfully");
@@ -470,7 +597,6 @@ const User = () => {
   return (
     <Box
       sx={{
-        height: "10vh",
         display: "flex",
         overflowY: {
           xs: "auto",
@@ -499,8 +625,9 @@ const User = () => {
         }}
       />
 
-      <Box sx={{ height: "10vh" }}>
-        <Container maxWidth="lg" sx={{ height: "10%" }}>
+      <Box>
+        <Container maxWidth="lg">
+          {/* Hidden shipping label for printing */}
           <Box sx={{ display: "none" }}>
             <ShippingLabel
               partNo={selectedPartNo}
@@ -509,10 +636,11 @@ const User = () => {
               quantity={selectedPart.quantity}
               sender={senderInfo}
               receiver={receiverInfo}
+              refreshTrackingNumbers={trackingRefresh}
             />
           </Box>
 
-          <Grid container spacing={2} sx={{ height: "10%" }}>
+          <Grid container spacing={2}>
             <Grid
               item
               xs={12}
@@ -578,12 +706,7 @@ const User = () => {
               </Paper>
             </Grid>
 
-            <Grid
-              item
-              xs={12} // Full width on xs
-              sm={6} // Full width on sm
-              md={6} // Half width on md and up
-            >
+            <Grid item xs={12} sm={6} md={6}>
               <Paper sx={{ p: 2, height: "100%" }}>
                 <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
                   <IconButton size="small" sx={{ mr: 1 }}>
