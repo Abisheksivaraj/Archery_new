@@ -28,7 +28,7 @@ import InventoryIcon from "@mui/icons-material/Inventory";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import BackpackIcon from "@mui/icons-material/Backpack";
 import Barcode from "react-barcode";
-import matrix from "../assets/dataMatrix.gif"
+import matrix from "../assets/dataMatrix.gif";
 import pdf417 from "../assets/pdf417.gif";
 
 const ShippingLabel = ({
@@ -44,32 +44,30 @@ const ShippingLabel = ({
   const [trackingNo, setTrackingNo] = useState("");
   const [labelSize, setLabelSize] = useState({
     width: "100mm",
-    height: "100mm",
+    height: "150mm",
   });
 
   const fetchLabelSize = async () => {
     try {
       console.log("Fetching label size for partNo:", partNo);
-
       const response = await api.get(`/getLabelSize/${partNo}`);
-      console.log("API Response:", response.data); // Log API response
-
-      const sizeInInchesStr = response.data.labelSize; // e.g., "4 inch" or "6 inch"
+      console.log("API Response:", response.data);
+      const sizeInInchesStr = response.data.labelSize;
       console.log("Label Size (String):", sizeInInchesStr);
-
       const inches = parseInt(sizeInInchesStr);
       console.log("Label Size (Parsed Inches):", inches);
 
-      let width;
+      let width, height;
       if (inches === 4) {
         width = 100;
+        height = 150;
       } else if (inches === 6) {
         width = 150;
+        height = 150;
       } else {
         width = 100;
+        height = 150;
       }
-
-      const height = inches * 25.4;
 
       console.log("Final Label Size:", {
         width: `${width}mm`,
@@ -104,16 +102,17 @@ const ShippingLabel = ({
     quantity,
   });
 
-  // Container style to ensure border is clearly visible
+  const addressQr = `${sender.name}, ${sender.address}`;
+
   const containerStyle = {
-    padding: "10mm", // Add padding around the label to make sure border is not at the edge
+    padding: "10mm",
     display: "flex",
+    flexDirection: "column",
     justifyContent: "center",
     alignItems: "center",
     pageBreakInside: "avoid",
   };
 
-  // Updated label style with clearer border
   const labelStyle = {
     width: labelSize.width,
     height: labelSize.height,
@@ -124,11 +123,11 @@ const ShippingLabel = ({
     fontSize: "3mm",
     fontFamily: "Arial, sans-serif",
     position: "relative",
-    border: "3px solid black", // Thicker border for better visibility
-    padding: "8mm", // Internal padding to prevent content from touching the border
+    border: "3px solid black",
+    padding: "8mm",
     margin: "0",
     pageBreakInside: "avoid",
-    boxShadow: "0 0 5px rgba(0,0,0,0.1)", // Subtle shadow to make border stand out
+    boxShadow: "0 0 5px rgba(0,0,0,0.1)",
   };
 
   const sectionStyle = {
@@ -154,12 +153,25 @@ const ShippingLabel = ({
     justifyContent: "center",
   };
 
-  const addressQr = `${sender.name}, ${sender.address}`;
+  const codeContainerStyle = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: "3mm",
+    marginBottom: "3mm",
+    width: "100%",
+  };
+
+  const codeStyle = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+  };
 
   return (
     <div style={containerStyle} className="print-container">
       <div style={labelStyle} className="print-content">
-        {/* Logo section */}
         <div style={{ ...sectionStyle, textAlign: "center" }}>
           <img
             src={logoUrl}
@@ -175,14 +187,17 @@ const ShippingLabel = ({
             <div>{sender.address}</div>
           </div>
           <div style={dividerStyle}>
-            <img src={matrix} alt="" />
+            <img
+              src={matrix}
+              alt="Matrix Code"
+              style={{ width: "20mm", height: "20mm" }}
+            />
           </div>
         </div>
 
-        {/* To and shipping info section */}
         <div style={flexContainerWithBorder}>
           <div style={{ width: "60%" }}>
-            <strong>To:</strong>
+            <strong>Ship To:</strong>
             <div>{receiver.name}</div>
             <div>{receiver.address}</div>
           </div>
@@ -201,31 +216,25 @@ const ShippingLabel = ({
               <div>
                 <strong>Act weight:</strong> 25 Kg
               </div>
-              <div>CAD 1319865X2NJX2</div>
+              <div>CAD1319865X2NJX2</div>
             </div>
           </div>
         </div>
 
-        {/* Order info section */}
         <div
           style={{
-            ...sectionStyle,
             display: "flex",
+
             justifyContent: "space-between",
+            paddingBottom: "3mm",
+            marginBottom: "3mm",
           }}
         >
-          <div
-            style={{
-              borderRight: "1px solid #000",
-              paddingRight: "3mm",
-              width: "33%",
-            }}
-          >
+          <div>
             <strong>Order No:</strong> <span>{orderNo}</span>
           </div>
           <div
             style={{
-              borderRight: "1px solid #000",
               paddingRight: "3mm",
               paddingLeft: "3mm",
               width: "33%",
@@ -242,52 +251,108 @@ const ShippingLabel = ({
 
         <div
           style={{
-            textAlign: "center",
-            marginTop: "auto",
             display: "flex",
-            justifyContent: "space-between",
+            justifyContent: "center",
             alignItems: "center",
+            marginBottom: "3mm",
+            paddingBottom: "3mm",
           }}
         >
-          <div style={{ width: "30%" }}>
+          <img
+            src={pdf417}
+            alt="PDF417 Barcode"
+            style={{ width: "80mm", height: "15mm", objectFit: "contain" }}
+          />
+        </div>
+
+        <div style={codeStyle}>
+          <div
+            style={{
+              flex: "1",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "start",
+              justifyContent: "start",
+              padding: "2mm",
+            }}
+          >
             <QRCodeSVG value={addressQr} size={80} level="M" />
           </div>
-          <div>
-            <img src={pdf417} alt="" />
-          </div>
-          <div style={{ width: "30%" }} className="flex flex-col items-center">
-            <p
-              className="mb-2 text-center"
-              style={{
-                transform: "rotate(270deg)",
-              }}
-            >
-              Quantity
-            </p>
+
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <div
               style={{
-                width: "150px",
-                height: "40px",
-                overflow: "hidden",
-                transform: "rotate(90deg)",
+                position: "relative",
+                height: "45px",
+                width: "80px",
               }}
             >
-              <Barcode value={barcodeValue} />
+              <div
+                style={{
+                  position: "absolute",
+                  transform: "rotate(270deg)",
+                  bottom: "2px",
+                  fontWeight: "bold",
+                  zIndex: "2",
+                  fontSize: "3mm",
+                }}
+              >
+                Quantity
+              </div>
+
+              <div
+                style={{
+                  transform: "rotate(270deg)",
+                  transformOrigin: "center",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  position: "absolute",
+                  left: "10px",
+                  top: "0",
+                }}
+              >
+                <Barcode
+                  value={barcodeValue}
+                  width={0.6}
+                  height={43}
+                  displayValue={false}
+                  margin={0}
+                />
+              </div>
             </div>
           </div>
         </div>
-        <p
-          style={{ textAlign: "center", fontWeight: "bold", marginTop: "5mm" }}
+
+        <div
+          style={{
+            marginTop: "5mm",
+            textAlign: "center",
+            width: "100%",
+            paddingTop: "2mm",
+          }}
         >
-          All Observed rights by ATPL
-        </p>
+          <p
+            style={{
+              marginTop: "-5mm",
+              fontSize: "3mm",
+              fontWeight: "bold",
+            }}
+          >
+            All Observed rights by ATPL
+          </p>
+        </div>
       </div>
     </div>
   );
 };
-
-
-
 
 // Add these functions since they're referenced in ShippingLabel
 const generateOrderNumber = () => {
