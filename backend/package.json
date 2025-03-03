@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon Backend/index.js",
-    "start": "node Backend/index.js" 
+    "start": "node Backend/index.js"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +20,10 @@
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.13.1",
     "mongoose": "^8.10.0",
-    "nodemon": "^3.1.9"
+    "net": "^1.0.2",
+    "node-thermal-printer": "^4.4.4",
+    "nodemon": "^3.1.9",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1"
   }
 }

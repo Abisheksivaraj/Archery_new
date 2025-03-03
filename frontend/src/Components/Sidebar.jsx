@@ -38,6 +38,8 @@ import ListAltIcon from "@mui/icons-material/ListAlt";
 import PackageTable from "./PackageTable";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { FaBoxOpen } from "react-icons/fa";
+import { PiPrinterFill } from "react-icons/pi";
+import PrinterConnection from "./Printer";
 
 const drawerWidth = 240;
 const primaryColor = "#448ee4";
@@ -123,6 +125,7 @@ function PersistentDrawerLeft() {
       "/": "Dashboard",
       "/part": "🛠️ Part Master > Add",
       "/part_Table": "🛠️ Part Master > Table",
+      "/Printer": "🖨️ Printer Configuration",
       "/User": "📦 Dispatch",
     };
 
@@ -419,6 +422,22 @@ function PersistentDrawerLeft() {
               </ListItemWithTooltip>
             </List>
           </Collapse>
+          <ListItemWithTooltip tooltip="Printer Config">
+            <ListItem disablePadding>
+              <ListItemButton
+                selected={isActive("/Printer")}
+                onClick={() =>
+                  handleMenuClick("🖨️ Printer Configuration", null, "/Printer")
+                }
+                sx={getMenuItemStyle(isActive("/Printer"))}
+              >
+                <ListItemIcon>
+                  <PiPrinterFill className="h-[2rem] w-[2rem]" />
+                </ListItemIcon>
+                {open && <ListItemText primary="Printer" />}
+              </ListItemButton>
+            </ListItem>
+          </ListItemWithTooltip>
 
           <ListItemWithTooltip tooltip="Dispatch">
             <ListItem disablePadding>
@@ -480,6 +499,7 @@ function PersistentDrawerLeft() {
           <Route path="/part_Table" element={<PartTable />} />
           <Route path="/user" element={<User />} />
           <Route path="/table_List" element={<PackageTable />} />
+          <Route path="/Printer" element={<PrinterConnection />} />
         </Routes>
       </Main>
     </Box>
