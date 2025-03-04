@@ -123,7 +123,7 @@ const ShippingLabel = ({
     fontSize: "3mm",
     fontFamily: "Arial, sans-serif",
     position: "relative",
-    border: "3px solid black",
+    border: "6px solid #0000FF",
     padding: "8mm",
     margin: "0",
     pageBreakInside: "avoid",
@@ -131,7 +131,7 @@ const ShippingLabel = ({
   };
 
   const sectionStyle = {
-    borderBottom: "1px solid #000",
+    borderBottom: "2px solid red",
     paddingBottom: "3mm",
     marginBottom: "3mm",
   };
@@ -139,13 +139,13 @@ const ShippingLabel = ({
   const flexContainerWithBorder = {
     display: "flex",
     justifyContent: "space-between",
-    borderBottom: "1px solid #000",
+    borderBottom: "2px solid red",
     paddingBottom: "3mm",
     marginBottom: "3mm",
   };
 
   const dividerStyle = {
-    borderLeft: "1px solid #000",
+    borderLeft: "2px solid red",
     marginLeft: "3mm",
     paddingLeft: "3mm",
     display: "flex",
@@ -274,6 +274,7 @@ const ShippingLabel = ({
               alignItems: "start",
               justifyContent: "start",
               padding: "2mm",
+              color: "blue",
             }}
           >
             <QRCodeSVG value={addressQr} size={80} level="M" />
