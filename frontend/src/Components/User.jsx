@@ -511,50 +511,61 @@ const User = () => {
     fetchCounts();
   }, []);
 
-  const handlePrint = () => {
-    // Regenerate tracking numbers before printing
-    setTrackingRefresh((prev) => prev + 1);
+ const handlePrint = () => {
+   // Regenerate tracking numbers before printing
+   setTrackingRefresh((prev) => prev + 1);
 
-    // Small delay to ensure new tracking numbers are set before printing
-    setTimeout(() => {
-      const printWindow = window.open("", "_blank");
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Print Label</title>
-            <style>
-              @page {
-                size: 100mm 150mm;
-                margin: 0;
-              }
-              body {
-                margin: 0;
-                padding: 0;
-              }
-              #print-content {
-                width: 100%;
-                height: 100%;
-              }
-            </style>
-          </head> 
-          <body>
-            <div id="print-content">
-              ${document.querySelector(".print-content").outerHTML}
-            </div>
-            <script>
-              window.onload = function() {
-                window.print();
-                window.onafterprint = function() {
-                  window.close();
-                };
+   // Small delay to ensure new tracking numbers are set before printing
+   setTimeout(() => {
+     const printContent = document.querySelector(".print-content").outerHTML;
+
+     // Create a hidden iframe for printing
+     const iframe = document.createElement("iframe");
+     iframe.style.position = "absolute";
+     iframe.style.width = "0";
+     iframe.style.height = "0";
+     iframe.style.border = "none";
+     document.body.appendChild(iframe);
+
+     const doc = iframe.contentWindow.document;
+     doc.open();
+     doc.write(`
+      <html>
+        <head>
+          <title>Print Label</title>
+          <style>
+            @page {
+              size: 100mm 150mm;
+              margin: 0;
+            }
+            body {
+              margin: 0;
+              padding: 0;
+            }
+            #print-content {
+              width: 100%;
+              height: 100%;
+            }
+          </style>
+        </head>
+        <body>
+          <div id="print-content">${printContent}</div>
+          <script>
+            window.onload = function() {
+              window.focus();
+              window.print();
+              window.onafterprint = function() {
+                window.parent.document.body.removeChild(window.frameElement);
               };
-            </script>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-    }, 100);
-  };
+            };
+          <\/script>
+        </body>
+      </html>
+    `);
+     doc.close();
+   }, 100);
+ };
+
 
   const handlePartNoChange = (e) => {
     const value = e.target.value;
