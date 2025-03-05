@@ -517,45 +517,108 @@ const User = () => {
 
     // Small delay to ensure new tracking numbers are set before printing
     setTimeout(() => {
-      const printWindow = window.open("", "_blank");
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Print Label</title>
-            <style>
-              @page {
-                size: 100mm 150mm;
-                margin: 0;
-              }
-              body {
-                margin: 0;
-                padding: 0;
-              }
-              #print-content {
-                width: 100%;
-                height: 100%;
-              }
-            </style>
-          </head> 
-          <body>
-            <div id="print-content">
-              ${document.querySelector(".print-content").outerHTML}
-            </div>
-            <script>
-              window.onload = function() {
-                window.print();
-                window.onafterprint = function() {
-                  window.close();
-                };
-              };
-            </script>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
+      // Create a new div to clone the print content
+      const printContent = document.querySelector(".print-content");
+
+      if (!printContent) {
+        console.error("Print content not found");
+        return;
+      }
+
+      // Create a new div for print
+      const printContainer = document.createElement("div");
+      printContainer.id = "print-container";
+      printContainer.style.position = "fixed";
+      printContainer.style.top = "0";
+      printContainer.style.left = "0";
+      printContainer.style.width = "100%";
+      printContainer.style.height = "100%";
+      printContainer.style.backgroundColor = "white";
+      printContainer.style.zIndex = "9999";
+      printContainer.style.display = "flex";
+      printContainer.style.justifyContent = "center";
+      printContainer.style.alignItems = "center";
+      printContainer.style.overflow = "auto";
+
+      // Clone the print content
+      const clonedContent = printContent.cloneNode(true);
+      clonedContent.style.width = "100mm";
+      clonedContent.style.height = "150mm";
+      clonedContent.style.margin = "0 auto";
+      clonedContent.style.boxShadow = "0 0 10px rgba(0,0,0,0.1)";
+
+      // Append cloned content to container
+      printContainer.appendChild(clonedContent);
+
+      // Add print styles
+      const printStyles = document.createElement("style");
+      printStyles.textContent = `
+      @media print {
+        body * {
+          visibility: hidden;
+        }
+        #print-container, 
+        #print-container * {
+          visibility: visible;
+        }
+        #print-container {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+        }
+      }
+    `;
+
+      // Append container and styles to body
+      document.body.appendChild(printContainer);
+      document.body.appendChild(printStyles);
+
+      // Create print button
+      const printButton = document.createElement("button");
+      printButton.textContent = "Print Label";
+      printButton.style.position = "fixed";
+      printButton.style.bottom = "20px";
+      printButton.style.left = "50%";
+      printButton.style.transform = "translateX(-50%)";
+      printButton.style.zIndex = "10000";
+      printButton.style.padding = "10px 20px";
+      printButton.style.backgroundColor = "#007bff";
+      printButton.style.color = "white";
+      printButton.style.border = "none";
+      printButton.style.borderRadius = "5px";
+
+      printButton.addEventListener("click", () => {
+        window.print();
+
+        // Remove print container after printing
+        document.body.removeChild(printContainer);
+        document.body.removeChild(printStyles);
+      });
+
+      // Add close button
+      const closeButton = document.createElement("button");
+      closeButton.textContent = "Close";
+      closeButton.style.position = "fixed";
+      closeButton.style.bottom = "20px";
+      closeButton.style.right = "20px";
+      closeButton.style.zIndex = "10000";
+      closeButton.style.padding = "10px 20px";
+      closeButton.style.backgroundColor = "#dc3545";
+      closeButton.style.color = "white";
+      closeButton.style.border = "none";
+      closeButton.style.borderRadius = "5px";
+
+      closeButton.addEventListener("click", () => {
+        document.body.removeChild(printContainer);
+        document.body.removeChild(printStyles);
+      });
+
+      // Append buttons to body
+      document.body.appendChild(printButton);
+      document.body.appendChild(closeButton);
     }, 100);
   };
-
   const handlePartNoChange = (e) => {
     const value = e.target.value;
     setSelectedPartNo(value);
