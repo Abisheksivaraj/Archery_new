@@ -134,6 +134,9 @@ const ShippingLabel = ({
     borderBottom: "2px solid red",
     paddingBottom: "3mm",
     marginBottom: "3mm",
+    display:"flex",
+    flexDirection: "row",
+    justifyContent: "space-between",
   };
 
   const flexContainerWithBorder = {
@@ -173,11 +176,8 @@ const ShippingLabel = ({
     <div style={containerStyle} className="print-container">
       <div style={labelStyle} className="print-content">
         <div style={{ ...sectionStyle, textAlign: "center" }}>
-          <img
-            src={logoUrl}
-            alt="Company Logo"
-            style={{ height: "12mm", objectFit: "contain" }}
-          />
+          <h3>ARCHERY TECHNOCRATS</h3>
+          <h3>HONEYWELL</h3>
         </div>
 
         <div style={flexContainerWithBorder}>
