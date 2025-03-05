@@ -277,7 +277,7 @@ const ShippingLabel = ({
               color: "blue",
             }}
           >
-            <QRCodeSVG value={addressQr} size={80} level="M" />
+            <QRCodeSVG value={addressQr} size={100} level="M" />
           </div>
 
           <div
@@ -342,7 +342,7 @@ const ShippingLabel = ({
         >
           <p
             style={{
-              marginTop: "-5mm",
+              marginTop: "-7mm",
               fontSize: "3mm",
               fontWeight: "bold",
             }}
@@ -517,43 +517,86 @@ const User = () => {
 
     // Small delay to ensure new tracking numbers are set before printing
     setTimeout(() => {
-      const printWindow = window.open("", "_blank");
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Print Label</title>
-            <style>
-              @page {
-                size: 100mm 150mm;
-                margin: 0;
-              }
+      const printContainer = document.createElement("div");
+      printContainer.innerHTML = `
+      <html>
+        <head>
+          <title>Print Label</title>
+          <style>
+            @page {
+              size: 100mm 150mm;
+              margin: 0;
+            }
+            body {
+              margin: 0;
+              padding: 0;
+              width: 100mm;
+              height: 150mm;
+              overflow: hidden;
+            }
+            #print-content {
+              width: 100mm;
+              height: 150mm;
+              overflow: hidden;
+              page-break-inside: avoid;
+              transform: scale(1);
+              transform-origin: top left;
+            }
+            @media print {
               body {
                 margin: 0;
                 padding: 0;
               }
               #print-content {
+                position: absolute;
+                top: 0;
+                left: 0;
                 width: 100%;
                 height: 100%;
+                overflow: hidden;
               }
-            </style>
-          </head> 
-          <body>
-            <div id="print-content">
-              ${document.querySelector(".print-content").outerHTML}
-            </div>
-            <script>
-              window.onload = function() {
-                window.print();
-                window.onafterprint = function() {
-                  window.close();
-                };
-              };
-            </script>
-          </body>
-        </html>
-      `);
+            }
+          </style>
+        </head>
+        <body>
+          <div id="print-content">
+            ${document.querySelector(".print-content").outerHTML}
+          </div>
+        </body>
+      </html>
+    `;
+
+      const printWindow = window.open("", "_blank");
+      printWindow.document.write(printContainer.innerHTML);
       printWindow.document.close();
+
+      printWindow.onload = function () {
+        printWindow.print();
+        printWindow.onafterprint = function () {
+          printWindow.close();
+        };
+      };
     }, 100);
+  };
+
+  // In the ShippingLabel component, ensure fixed dimensions
+  const labelStyle = {
+    width: "100mm", // Explicitly set width
+    height: "150mm", // Explicitly set height
+    maxWidth: "100mm",
+    maxHeight: "150mm",
+    overflow: "hidden",
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    fontSize: "3mm",
+    fontFamily: "Arial, sans-serif",
+    position: "relative",
+    border: "6px solid #0000FF",
+    padding: "8mm",
+    margin: "0",
+    pageBreakInside: "avoid",
+    boxShadow: "0 0 5px rgba(0,0,0,0.1)",
   };
 
   const handlePartNoChange = (e) => {
