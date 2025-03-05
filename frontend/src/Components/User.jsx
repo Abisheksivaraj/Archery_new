@@ -511,73 +511,145 @@ const User = () => {
     fetchCounts();
   }, []);
 
-  const handlePrint = () => {
-    // Regenerate tracking numbers before printing
-    setTrackingRefresh((prev) => prev + 1);
 
-    // Small delay to ensure new tracking numbers are set before printing
-    setTimeout(() => {
-      const printContainer = document.createElement("div");
-      printContainer.innerHTML = `
-      <html>
-        <head>
-          <title>Print Label</title>
-          <style>
-            @page {
-              size: 100mm 150mm;
-              margin: 0;
-            }
+
+const handlePrint = () => {
+  // Regenerate tracking numbers before printing
+  setTrackingRefresh((prev) => prev + 1);
+
+  // Delay to ensure new tracking numbers are set
+  setTimeout(() => {
+    // Capture the shipping label HTML content
+    const labelContent = document.querySelector(".print-content");
+
+    if (!labelContent) {
+      console.error("Print content not found");
+      return;
+    }
+
+    // Detect if it's an Android device
+    const isAndroid = /Android/i.test(navigator.userAgent);
+
+    // Different approach for Android
+    if (isAndroid) {
+      // Create a temporary full-page div for Android
+      const tempDiv = document.createElement("div");
+      tempDiv.style.position = "fixed";
+      tempDiv.style.top = "0";
+      tempDiv.style.left = "0";
+      tempDiv.style.width = "100%";
+      tempDiv.style.height = "100%";
+      tempDiv.style.backgroundColor = "white";
+      tempDiv.style.zIndex = "9999";
+      tempDiv.style.overflow = "auto";
+
+      // Clone the label content
+      const clonedContent = labelContent.cloneNode(true);
+      clonedContent.style.width = "100mm";
+      clonedContent.style.height = "150mm";
+      clonedContent.style.margin = "0 auto";
+
+      tempDiv.appendChild(clonedContent);
+      document.body.appendChild(tempDiv);
+
+      // Create a print button
+      const printButton = document.createElement("button");
+      printButton.textContent = "Print Label";
+      printButton.style.position = "fixed";
+      printButton.style.bottom = "20px";
+      printButton.style.left = "50%";
+      printButton.style.transform = "translateX(-50%)";
+      printButton.style.zIndex = "10000";
+      printButton.style.padding = "10px 20px";
+      printButton.style.backgroundColor = "#007bff";
+      printButton.style.color = "white";
+      printButton.style.border = "none";
+      printButton.style.borderRadius = "5px";
+
+      printButton.onclick = () => {
+        // Remove print button before printing
+        tempDiv.removeChild(printButton);
+
+        // Trigger print
+        window.print();
+
+        // Remove temporary div after printing
+        document.body.removeChild(tempDiv);
+      };
+
+      tempDiv.appendChild(printButton);
+    } else {
+      // Existing print method for non-Android devices
+      const printWindow = window.open("", "_blank");
+
+      const printStyles = `
+        <style>
+          @page {
+            size: 100mm 150mm;
+            margin: 0;
+          }
+          body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+          }
+          .print-content {
+            width: 100mm;
+            height: 150mm;
+            background-color: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+            page-break-inside: avoid;
+          }
+          @media print {
             body {
               margin: 0;
               padding: 0;
-              width: 100mm;
-              height: 150mm;
-              overflow: hidden;
             }
-            #print-content {
-              width: 100mm;
-              height: 150mm;
-              overflow: hidden;
-              page-break-inside: avoid;
-              transform: scale(1);
-              transform-origin: top left;
+            .print-content {
+              margin: 0;
+              padding: 0;
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
             }
-            @media print {
-              body {
-                margin: 0;
-                padding: 0;
-              }
-              #print-content {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                overflow: hidden;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div id="print-content">
-            ${document.querySelector(".print-content").outerHTML}
-          </div>
-        </body>
-      </html>
-    `;
+          }
+        </style>
+      `;
 
-      const printWindow = window.open("", "_blank");
-      printWindow.document.write(printContainer.innerHTML);
+      printWindow.document.open();
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Print Label</title>
+            ${printStyles}
+          </head>
+          <body>
+            <div class="print-content">
+              ${labelContent.outerHTML}
+            </div>
+            <script>
+              window.onload = function() {
+                window.print();
+                window.onafterprint = function() {
+                  window.close();
+                };
+              };
+            </script>
+          </body>
+        </html>
+      `);
       printWindow.document.close();
-
-      printWindow.onload = function () {
-        printWindow.print();
-        printWindow.onafterprint = function () {
-          printWindow.close();
-        };
-      };
-    }, 100);
-  };
+    }
+  }, 100);
+};
 
   // In the ShippingLabel component, ensure fixed dimensions
   const labelStyle = {
