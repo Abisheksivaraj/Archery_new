@@ -176,8 +176,8 @@ const ShippingLabel = ({
     <div style={containerStyle} className="print-container">
       <div style={labelStyle} className="print-content">
         <div style={{ ...sectionStyle, textAlign: "center" }}>
-          <h3>ARCHERY TECHNOCRATS</h3>
-          <h3>HONEYWELL</h3>
+          <h3 txc>ARCHERY TECHNOCRATS</h3>
+          
         </div>
 
         <div style={flexContainerWithBorder}>
@@ -390,8 +390,8 @@ const senderInfo = {
 };
 
 const receiverInfo = {
-  name: "Honeywell Industrial Automation",
-  address: "855 S, Mint StCharlotte , NC 28202, 800-582-4263",
+  name: "ARCHERY TECHNOCRATS PRIVATE LIMITED",
+  address: "No.46/4,Novel Tech Park , GB Palaya | Kudlu Gate | Bangalore",
 };
 
 const User = () => {
