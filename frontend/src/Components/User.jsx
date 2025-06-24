@@ -134,7 +134,7 @@ const ShippingLabel = ({
     borderBottom: "2px solid red",
     paddingBottom: "3mm",
     marginBottom: "3mm",
-    display:"flex",
+    display: "flex",
     flexDirection: "row",
     justifyContent: "space-between",
   };
@@ -177,7 +177,6 @@ const ShippingLabel = ({
       <div style={labelStyle} className="print-content">
         <div style={{ ...sectionStyle, textAlign: "center" }}>
           <h3 txc>ARCHERY TECHNOCRATS</h3>
-          
         </div>
 
         <div style={flexContainerWithBorder}>
@@ -511,25 +510,25 @@ const User = () => {
     fetchCounts();
   }, []);
 
- const handlePrint = () => {
-   // Regenerate tracking numbers before printing
-   setTrackingRefresh((prev) => prev + 1);
+  const handlePrint = () => {
+    // Regenerate tracking numbers before printing
+    setTrackingRefresh((prev) => prev + 1);
 
-   // Small delay to ensure new tracking numbers are set before printing
-   setTimeout(() => {
-     const printContent = document.querySelector(".print-content").outerHTML;
+    // Small delay to ensure new tracking numbers are set before printing
+    setTimeout(() => {
+      const printContent = document.querySelector(".print-content").outerHTML;
 
-     // Create a hidden iframe for printing
-     const iframe = document.createElement("iframe");
-     iframe.style.position = "absolute";
-     iframe.style.width = "0";
-     iframe.style.height = "0";
-     iframe.style.border = "none";
-     document.body.appendChild(iframe);
+      // Create a hidden iframe for printing
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "absolute";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "none";
+      document.body.appendChild(iframe);
 
-     const doc = iframe.contentWindow.document;
-     doc.open();
-     doc.write(`
+      const doc = iframe.contentWindow.document;
+      doc.open();
+      doc.write(`
       <html>
         <head>
           <title>Print Label</title>
@@ -562,10 +561,9 @@ const User = () => {
         </body>
       </html>
     `);
-     doc.close();
-   }, 100);
- };
-
+      doc.close();
+    }, 100);
+  };
 
   const handlePartNoChange = (e) => {
     const value = e.target.value;
@@ -725,7 +723,7 @@ const User = () => {
               md={6}
               sx={{ mb: { xs: 2, sm: 2, md: 0 } }}
             >
-              <Paper sx={{ p: 2, height: "100%" }}>
+              <Paper sx={{ p: 2, height: "100%" }}> 
                 <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
                   <IconButton size="small" sx={{ mr: 1 }}>
                     <SettingsIcon color="primary" />

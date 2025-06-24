@@ -31,7 +31,9 @@ import Dashboard from "./Dashboard";
 import PartMaster from "./PartMaster";
 import PartTable from "./PartTable";
 import User from "./User";
+import JobCard from "./JobCard";
 import { toast, Toaster } from "react-hot-toast";
+import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 
 import { Button } from "@mui/material";
 import ListAltIcon from "@mui/icons-material/ListAlt";
@@ -121,12 +123,15 @@ function PersistentDrawerLeft() {
       localStorage.setItem("dropdownOpen", JSON.stringify(true));
     }
 
+    // Updated pathToMenuMap - only store string labels, not objects
     const pathToMenuMap = {
-      "/": "Dashboard",
+      "/": "📊 Dashboard",
+      "/dashboard": "📊 Dashboard",
       "/part": "🛠️ Part Master > Add",
       "/part_Table": "🛠️ Part Master > Table",
       "/Printer": "🖨️ Printer Configuration",
       "/User": "📦 Dispatch",
+      "/Card": "📱 Job Card",
     };
 
     const currentMenu = pathToMenuMap[location.pathname];
@@ -422,6 +427,7 @@ function PersistentDrawerLeft() {
               </ListItemWithTooltip>
             </List>
           </Collapse>
+
           <ListItemWithTooltip tooltip="Printer Config">
             <ListItem disablePadding>
               <ListItemButton
@@ -453,6 +459,21 @@ function PersistentDrawerLeft() {
               </ListItemButton>
             </ListItem>
           </ListItemWithTooltip>
+
+          <ListItemWithTooltip tooltip="Job Card">
+            <ListItem disablePadding>
+              <ListItemButton
+                selected={isActive("/Card")}
+                onClick={() => handleMenuClick("📱 Job Card", null, "/Card")}
+                sx={getMenuItemStyle(isActive("/Card"))}
+              >
+                <ListItemIcon>
+                  <QrCodeScannerIcon />
+                </ListItemIcon>
+                {open && <ListItemText primary="Job Card" />}
+              </ListItemButton>
+            </ListItem>
+          </ListItemWithTooltip>
         </List>
         <Divider />
         <Box
@@ -479,14 +500,13 @@ function PersistentDrawerLeft() {
               top: "-1rem",
               display: "flex",
               alignItems: "center",
-
               color: "#448ee4",
             }}
           >
             <LogoutIcon />
             {open && (
               <ListItemText primary="Logout" sx={{ color: "black", ml: -13 }} />
-            )}{" "}
+            )}
           </Button>
         </ListItemWithTooltip>
       </Drawer>
@@ -500,6 +520,7 @@ function PersistentDrawerLeft() {
           <Route path="/user" element={<User />} />
           <Route path="/table_List" element={<PackageTable />} />
           <Route path="/Printer" element={<PrinterConnection />} />
+          <Route path="/Card" element={<JobCard />} />
         </Routes>
       </Main>
     </Box>

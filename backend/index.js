@@ -11,7 +11,7 @@ const net = require("net");
 app.use(
   cors({
     origin: "*", // Allow requests from this origin
-
+    // origin: "http://localhost:5173",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Allowed methods
     allowedHeaders: ["Content-Type", "Authorization"], // Allowed headers
     credentials: true, // Allow credentials (if required)
