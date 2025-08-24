@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
-import barcode1 from "../assets/barcode1.png";
-import barcode2 from "../assets/barcode2.png";
-import barcode3 from "../assets/barcode3.png";
+import { api } from "../apiConfig";
 
 const JobCard = () => {
   const [jobNo, setJobNo] = useState("");
   const [scannedData, setScannedData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
 
   useEffect(() => {
     let barcodeBuffer = "";
@@ -28,14 +29,13 @@ const JobCard = () => {
       }, 100);
     };
 
-    const processBarcode = (barcode) => {
+    const processBarcode = async (barcode) => {
       const parsedData = parseBarcodeData(barcode);
       setJobNo(barcode);
       setScannedData(parsedData);
 
-      setTimeout(() => {
-        handlePrint(parsedData);
-      }, 500);
+      // Automatically send to API when barcode is scanned
+      await handleApiSubmission(barcode);
     };
 
     document.addEventListener("keypress", handleKeyPress);
@@ -49,391 +49,496 @@ const JobCard = () => {
   }, []);
 
   const parseBarcodeData = (barcode) => {
-    // Get current date in DDMMYYYY format
-    const currentDate = new Date();
-    const day = String(currentDate.getDate()).padStart(2, "0");
-    const month = String(currentDate.getMonth() + 1).padStart(2, "0");
-    const year = currentDate.getFullYear();
-    const formattedDate = `${day}${month}${year}`;
+    // Split the barcode data by spaces
+    const parts = barcode.trim().split(/\s+/);
 
     return {
-      jobNo: barcode, // Always use the scanned/entered value
-      partNo: "11711-F2050",
-      partNoDrawing: "A148197-1STD2",
-      customer: "TIEI",
-      lotNo: "H5F",
-      size: "STD 2",
-      qty: "261 Pcs",
-      description: "155Y Bearing Crankshaft No:01",
-      date: formattedDate,
-      rCode: "R002",
-      pageNo: "28",
+      vendorCode: parts[0] || "", // L059
+      poNumber: parts[1] || "", // 1609036
+      invoiceNumber: parts[2] || "", // 1B25007182
+      date: parts[3] || "", // 20.06.2025
+      field5: parts[4] || "", // 34AAACL3763E1ZS
+      field6: parts[5] || "", // 651221.22
+      field7: parts[6] || "", // 508766.58
+      vehicleNumber: parts[7] || "", // HR55AR1081
+      field9: parts[8] || "", // 0.00
+      field10: parts[9] || "", // 142454.64
+      field11: parts[10] || "", // 0.00
+      partNumber: parts[11] || "", // 31400M52T10
+      field13: parts[12] || "", // 85114000
+      quantity: parts[13] || "", // 126
+      field15: parts[14] || "", // 4037.83
+      rawData: barcode,
+      parsedParts: parts,
+      totalParts: parts.length,
     };
+  };
+
+  // API function to submit barcode data - SIMPLIFIED WITH DEBUGGING
+  const submitBarcodeToApi = async (barcodeData) => {
+    console.log("🚀 Sending to API:", { barcodeData });
+
+    try {
+      const response = await api.post("/api/scan", {
+        barcodeData,
+      });
+
+      const data = response.data;
+      console.log("✅ API Response:", data);
+
+      if (!data.success) {
+        throw new Error(data.message || "Failed to submit barcode");
+      }
+
+      return data;
+    } catch (error) {
+      console.error("❌ API Error:", error);
+      if (error.response) {
+        console.error("❌ Response data:", error.response.data);
+        console.error("❌ Response status:", error.response.status);
+        throw new Error(error.response.data.message || "Server error");
+      }
+      throw error;
+    }
+  };
+
+  // Handle API submission
+  const handleApiSubmission = async (barcodeData) => {
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const result = await submitBarcodeToApi(barcodeData);
+
+      if (result.success) {
+        setSuccess(
+          `Data saved successfully! Invoice: ${result.data.invoiceNumber}`
+        );
+      } else {
+        setError(result.message || "Failed to save data");
+      }
+    } catch (err) {
+      if (err.message.includes("already exists")) {
+        setError(`Duplicate invoice detected: ${err.message}`);
+      } else if (err.message.includes("Validation failed")) {
+        setError(`Validation error: Missing required fields`);
+      } else {
+        setError(err.message || "Network error occurred");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleManualInput = (event) => {
     const value = event.target.value;
     setJobNo(value);
+    setError(null);
+    setSuccess(null);
 
     if (value.length > 0) {
       const parsedData = parseBarcodeData(value);
       setScannedData(parsedData);
-      setTimeout(() => {
-        handlePrint(parsedData);
-      }, 500);
+    } else {
+      setScannedData(null);
     }
   };
 
-  const handlePrint = (data = scannedData) => {
-    if (!data) return;
+  const handleProcessData = async (data = scannedData) => {
+    if (!data || !data.rawData) {
+      setError("No data to process");
+      return;
+    }
 
-    const originalContent = document.body.innerHTML;
-    const originalTitle = document.title;
-
-    const printContent = generatePrintLabel(data);
-
-    const printStyles = `
-      <style>
-        @page {
-          size: 150mm 60mm;
-          margin: 0;
-        }
-        body {
-          margin: 0;
-          padding: 0;
-          font-family: Arial, sans-serif;
-          background: white;
-          width: 150mm;
-          height: 60mm;
-          overflow: hidden;
-          color: black;
-          font-weight: bold;
-        }
-        .label {
-          width: 150mm;
-          height: 60mm;
-          border: 3px solid black;
-          background: white;
-          display: flex;
-          flex-direction: column;
-          box-sizing: border-box;
-          position: relative;
-        }
-        .top-section {
-          height: 50%;
-          display: flex;
-          border-bottom: 3px solid black;
-        }
-        .job-section {
-          width: 45%;
-          padding: 2mm;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-        }
-        .job-label {
-          font-size: 10pt;
-          font-weight: bold;
-          margin-bottom: 1mm;
-          color: black;
-        }
-        .job-number {
-          font-size: 32pt;
-          font-weight: bold;
-          line-height: 1;
-          margin-top:4mm;
-          
-        }
-        .barcode-section {
-          width: 35%;
-          padding: 1mm;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          align-items: center;
-          border-right: 3px solid black;
-        }
-        .info-section {
-          width: 20%;
-          display: flex;
-          flex-direction: column;
-        }
-        .info-row {
-          flex: 1;
-          display: flex;
-          border-bottom: 3px solid black;
-        }
-        .info-row:last-child {
-          border-bottom: none;
-        }
-        .info-label {
-          color: black;
-          font-size: 7pt;
-          font-weight: bold;
-          padding: 1mm;
-          width: 40%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .info-value {
-          font-size: 8pt;
-          font-weight: bold;
-          padding: 1mm;
-          width: 60%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-left: 3px solid black;
-          color: black;
-        }
-        .bottom-section {
-          height: 50%;
-          display: flex;
-          flex-direction: column;
-        }
-        .part-row {
-          height: 100%;
-          display: flex;
-          position: relative;
-        }
-        .part-label-section {
-          width: 15%;
-          display: flex;
-          flex-direction: column;
-          justify-content: flex-start;
-          align-items: flex-start;
-          padding: 2mm;
-        }
-        .part-label {
-          font-size: 6pt;
-          font-weight: bold;
-          color: black;
-        }
-        .part-barcode-section {
-          width: 25%;
-          padding: 2mm;
-          display: flex;
-          flex-direction: column;
-          justify-content: flex-start;
-          align-items: center;
-        }
-        .barcode3-section {
-          width: 30%;
-          padding: 2mm;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          align-items: center;
-        }
-        .date-section {
-          width: 30%;
-          padding: 2mm;
-          display: flex;
-          flex-direction: column;
-          justify-content: flex-start;
-          align-items: flex-start;
-        }
-        .barcode-image {
-          max-height: 15mm;
-          max-width: 100%;
-          object-fit: contain;
-          margin-bottom: 1mm;
-        }
-        .part-barcode-image {
-          max-height: 20mm;
-          max-width: 100%;
-          object-fit: contain;
-          margin-bottom: 2mm;
-        }
-        .barcode3-image {
-          max-height: 12mm;
-          max-width: 100%;
-          object-fit: contain;
-          margin-bottom: 2mm;
-        }
-        .barcode-text {
-          font-size: 14pt;
-          font-weight: bold;
-          text-align: center;
-          color: black;
-        }
-        .part-barcode-text {
-          font-size: 14pt;
-          font-weight: bold;
-          text-align: center;
-          white-space: nowrap;
-          color: black;
-        }
-        .barcode3-text {
-          font-size: 12pt;
-          font-weight: bold;
-          text-align: center;
-          white-space: nowrap;
-          color: black;
-        }
-        .description-text {
-          font-size: 12pt;
-          font-weight: bold;
-          text-align: center;
-          margin-top: 2mm;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          color: black;
-        }
-        .r-code {
-          font-size: 12pt;
-          font-weight: bold;
-          text-align: center;
-          margin-top: 1mm;
-          color: black;
-        }
-        .date-text {
-          font-size: 10pt;
-          font-weight: bold;
-          text-align: left;
-          color: black;
-        }
-        .page-number {
-          position: absolute;
-          bottom: 2mm;
-          right: 2mm;
-          font-size: 12pt;
-          font-weight: bold;
-          background: white;
-          z-index: 10;
-          color: black;
-        }
-      </style>
-    `;
-
-    document.title = "Print Job Card";
-    document.body.innerHTML = printStyles + printContent;
-
-    setTimeout(() => {
-      window.print();
-
-      setTimeout(() => {
-        document.title = originalTitle;
-        document.body.innerHTML = originalContent;
-        setJobNo("");
-        setScannedData(null);
-        setTimeout(() => {
-          window.location.reload();
-        }, 100);
-      }, 500);
-    }, 100);
+    await handleApiSubmission(data.rawData);
   };
 
-  const generatePrintLabel = (data) => {
-    if (!data) return "";
+  const clearData = () => {
+    setJobNo("");
+    setScannedData(null);
+    setError(null);
+    setSuccess(null);
+  };
 
-    return `
-      <div class="label">
-        <div class="top-section">
-          <div class="job-section">
-            <div class="job-label">Part No (for FG/WH)</div>
-            <div class="job-number ">J.No: ${data.jobNo}</div>
-          </div>
-          <div class="barcode-section">
-            <img src="${barcode1}" alt="R-Code Barcode" class="barcode-image" />
-            <div class="r-code">${data.rCode}</div>
-          </div>
-          <div class="info-section">
-            <div class="info-row">
-              <div class="info-label">Lot No.</div>
-              <div class="info-value">${data.lotNo}</div>
-            </div>
-            <div class="info-row">
-              <div class="info-label">Customer</div>
-              <div class="info-value">${data.customer}</div>
-            </div>
-            <div class="info-row">
-              <div class="info-label">Size</div>
-              <div class="info-value">${data.size}</div>
-            </div>
-            <div class="info-row">
-              <div class="info-label">Qty</div>
-              <div class="info-value">${data.qty}</div>
-            </div>
-          </div>
-        </div>
-        
-        <div class="bottom-section">
-          <div class="part-row">
-            <div class="part-label-section">
-              <div class="part-label w-[30rem]">Part No as Per Dwg.</div>
-            </div>
-            <div class="part-barcode-section  mt-5 -ml-20">
-              <img src="${barcode2}" alt="Part Number Barcode" class="part-barcode-image" />
-              <div class="part-barcode-text">${data.partNo}</div>
-            </div>
-            <div class="barcode3-section ml-[8rem]">
-              <img src="${barcode3}" alt="Part Drawing Barcode" class="barcode3-image" />
-              <div class="barcode3-text">${data.partNoDrawing}</div>
-              <div class="description-text">${data.description}</div>
-            </div>
-            <div class="date-section">
-              <div class="date-text mt-[2.7rem]">Dt: ${data.date}</div>
-              <div class="page-number">${data.pageNo}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
+  // Get recent scans - SIMPLIFIED
+  const fetchRecentScans = async () => {
+    try {
+      const response = await api.get(`/api/scan/recent?limit=5`);
+      const data = response.data;
+
+      if (data.success) {
+        console.log("Recent scans:", data.data);
+        // You can set this to state and display it if needed
+      }
+    } catch (err) {
+      console.error("Failed to fetch recent scans:", err);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-2xl mx-auto px-4">
-        <h1 className="text-3xl font-bold text-center text-gray-800 mb-8">
-          Job Card Scanner - Exact Label Design
-        </h1>
+      <div className="max-w-7xl mx-auto px-4 h-screen">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[calc(100vh-8rem)]">
+          {/* Left side - Scanner input */}
+          <div className="bg-white rounded-lg shadow-md p-6 h-fit max-h-[calc(100vh-12rem)] overflow-y-auto">
+            <div className="mb-4">
+              <label className="flex items-center text-sm font-medium text-gray-700 mb-2">
+                📱 Barcode Input
+              </label>
+              <input
+                type="text"
+                value={jobNo}
+                onChange={handleManualInput}
+                placeholder="Scan barcode or enter manually"
+                className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-md focus:outline-none focus:border-blue-500 transition-colors"
+                disabled={loading}
+              />
+              <p className="text-sm text-gray-500 mt-2">
+                Scan a barcode or type manually. Data will be parsed and saved
+                automatically.
+              </p>
+            </div>
 
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="mb-4">
-            <label className="flex items-center text-sm font-medium text-gray-700 mb-2">
-              📱 Job No (60x150mm Label)
-            </label>
-            <input
-              type="text"
-              value={jobNo}
-              onChange={handleManualInput}
-              placeholder="Scan barcode or enter manually"
-              className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-md focus:outline-none focus:border-blue-500 transition-colors"
-            />
-            <p className="text-sm text-gray-500 mt-2">
-              Scan a barcode or type manually. Print dialog opens automatically
-              with exact 60x150mm dimensions.
-            </p>
-          </div>
-
-          {scannedData && (
-            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
-              <div className="flex items-center text-green-800">
-                <div className="flex-shrink-0">
-                  <svg
-                    className="h-5 w-5"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium">
-                    Data scanned successfully! Preparing to print exact label
-                    design...
-                  </p>
+            {/* Loading indicator */}
+            {loading && (
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="flex items-center text-blue-800">
+                  <div className="flex-shrink-0">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium">
+                      Saving data to server...
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {/* Success message */}
+            {success && (
+              <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-md">
+                <div className="flex items-center text-green-800">
+                  <div className="flex-shrink-0">
+                    <svg
+                      className="h-5 w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium">{success}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Error message */}
+            {error && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+                <div className="flex items-center text-red-800">
+                  <div className="flex-shrink-0">
+                    <svg
+                      className="h-5 w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium">{error}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {scannedData && (
+              <div className="mt-4 space-y-4">
+                {!success && !error && (
+                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <div className="flex items-center text-yellow-800">
+                      <div className="flex-shrink-0">
+                        <svg
+                          className="h-5 w-5"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm font-medium">
+                          Data parsed! Found {scannedData.totalParts} fields.
+                          {!loading &&
+                            " Click 'Process Data' to save manually."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={clearData}
+                    className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200"
+                    disabled={loading}
+                  >
+                    Clear Data
+                  </button>
+                  <button
+                    onClick={fetchRecentScans}
+                    className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200"
+                    disabled={loading}
+                  >
+                    View Recent
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right side - Scanned data display - SAME AS BEFORE */}
+          <div className="bg-white rounded-lg shadow-md p-6 flex flex-col h-[calc(100vh-12rem)]">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">
+              📄 Parsed Data
+            </h2>
+
+            {scannedData ? (
+              <div className="space-y-4 overflow-y-auto flex-1 pr-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+                {/* Primary Fields */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="bg-blue-50 p-3 rounded-md border-l-4 border-blue-500">
+                    <label className="text-xs font-semibold text-blue-600 uppercase tracking-wide">
+                      Vendor Code
+                    </label>
+                    <p className="text-lg font-bold text-gray-900 mt-1">
+                      {scannedData.vendorCode || "N/A"}
+                    </p>
+                  </div>
+
+                  <div className="bg-green-50 p-3 rounded-md border-l-4 border-green-500">
+                    <label className="text-xs font-semibold text-green-600 uppercase tracking-wide">
+                      PO Number
+                    </label>
+                    <p className="text-lg font-bold text-gray-900 mt-1">
+                      {scannedData.poNumber || "N/A"}
+                    </p>
+                  </div>
+
+                  <div className="bg-purple-50 p-3 rounded-md border-l-4 border-purple-500">
+                    <label className="text-xs font-semibold text-purple-600 uppercase tracking-wide">
+                      Invoice Number
+                    </label>
+                    <p className="text-lg font-bold text-gray-900 mt-1">
+                      {scannedData.invoiceNumber || "N/A"}
+                    </p>
+                  </div>
+
+                  <div className="bg-orange-50 p-3 rounded-md border-l-4 border-orange-500">
+                    <label className="text-xs font-semibold text-orange-600 uppercase tracking-wide">
+                      Date
+                    </label>
+                    <p className="text-lg font-bold text-gray-900 mt-1">
+                      {scannedData.date || "N/A"}
+                    </p>
+                  </div>
+
+                  <div className="bg-red-50 p-3 rounded-md border-l-4 border-red-500">
+                    <label className="text-xs font-semibold text-red-600 uppercase tracking-wide">
+                      Vehicle Number
+                    </label>
+                    <p className="text-lg font-bold text-gray-900 mt-1">
+                      {scannedData.vehicleNumber || "N/A"}
+                    </p>
+                  </div>
+
+                  <div className="bg-indigo-50 p-3 rounded-md border-l-4 border-indigo-500">
+                    <label className="text-xs font-semibold text-indigo-600 uppercase tracking-wide">
+                      Part Number
+                    </label>
+                    <p className="text-lg font-bold text-gray-900 mt-1">
+                      {scannedData.partNumber || "N/A"}
+                    </p>
+                  </div>
+
+                  <div className="bg-pink-50 p-3 rounded-md border-l-4 border-pink-500">
+                    <label className="text-xs font-semibold text-pink-600 uppercase tracking-wide">
+                      Quantity
+                    </label>
+                    <p className="text-lg font-bold text-gray-900 mt-1">
+                      {scannedData.quantity || "N/A"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Additional Fields */}
+                <div className="mt-6">
+                  <h3 className="text-lg font-semibold text-gray-700 mb-3">
+                    Additional Fields
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {[
+                      { label: "Field 5", value: scannedData.field5 },
+                      { label: "Field 6", value: scannedData.field6 },
+                      { label: "Field 7", value: scannedData.field7 },
+                      { label: "Field 9", value: scannedData.field9 },
+                      { label: "Field 10", value: scannedData.field10 },
+                      { label: "Field 11", value: scannedData.field11 },
+                      { label: "Field 13", value: scannedData.field13 },
+                      { label: "Field 15", value: scannedData.field15 },
+                    ].map((field, index) => (
+                      <div key={index} className="bg-gray-50 p-2 rounded-md">
+                        <label className="text-xs font-medium text-gray-500 uppercase">
+                          {field.label}
+                        </label>
+                        <p className="text-sm font-semibold text-gray-900 mt-1 break-all">
+                          {field.value || "N/A"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Raw Data Section */}
+                <div className="mt-6 p-4 bg-gray-100 rounded-md">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                    Raw Data
+                  </h3>
+                  <p className="text-xs font-mono text-gray-600 break-all">
+                    {scannedData.rawData}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Total fields parsed: {scannedData.totalParts}
+                  </p>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => handleProcessData(scannedData)}
+                    className={`w-full font-bold py-3 px-4 rounded-md transition-colors duration-200 flex items-center justify-center ${
+                      loading
+                        ? "bg-gray-400 cursor-not-allowed text-gray-200"
+                        : success
+                        ? "bg-green-600 hover:bg-green-700 text-white"
+                        : "bg-blue-600 hover:bg-blue-700 text-white"
+                    }`}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <svg
+                          className="animate-spin w-5 h-5 mr-2"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                            fill="none"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          />
+                        </svg>
+                        Saving...
+                      </>
+                    ) : success ? (
+                      <>
+                        <svg
+                          className="w-5 h-5 mr-2"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                        Saved Successfully
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="w-5 h-5 mr-2"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+                          />
+                        </svg>
+                        Process Data
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12 flex-1 flex flex-col justify-center">
+                <svg
+                  className="w-16 h-16 text-gray-300 mx-auto mb-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                <p className="text-gray-500 text-lg">No data scanned yet</p>
+                <p className="text-gray-400 text-sm mt-2">
+                  Scan or enter a barcode on the left to see the parsed data
+                  here
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -53,7 +53,7 @@ const App = () => {
             zIndex: 1000,
           }}
         >
-          <Footer />
+          {/* <Footer /> */}
         </div>
       )}
     </div>

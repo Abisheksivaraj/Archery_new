@@ -30,7 +30,7 @@ import companyLogo from "../assets/companyLogo.png";
 import Dashboard from "./Dashboard";
 import PartMaster from "./PartMaster";
 import PartTable from "./PartTable";
-import User from "./User";
+import User from "./dispatch";
 import JobCard from "./JobCard";
 import { toast, Toaster } from "react-hot-toast";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
@@ -42,6 +42,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import { FaBoxOpen } from "react-icons/fa";
 import { PiPrinterFill } from "react-icons/pi";
 import PrinterConnection from "./Printer";
+import DataTable from "./DataTable";
 
 const drawerWidth = 240;
 const primaryColor = "#448ee4";
@@ -129,9 +130,9 @@ function PersistentDrawerLeft() {
       "/dashboard": "📊 Dashboard",
       "/part": "🛠️ Part Master > Add",
       "/part_Table": "🛠️ Part Master > Table",
-      "/Printer": "🖨️ Printer Configuration",
+      "/Card": "📱 Invoice Scanning",
       "/User": "📦 Dispatch",
-      "/Card": "📱 Job Card",
+      "/Printer": "👤 User Master",
     };
 
     const currentMenu = pathToMenuMap[location.pathname];
@@ -264,7 +265,14 @@ function PersistentDrawerLeft() {
     navigate("/table_List");
   };
 
+  // New handler for Data Table button
+  const handleDataTableClick = () => {
+    console.log("Opening data table...");
+    navigate("/Data_Table"); // Navigate to your data table route
+  };
+
   const isUserRoute = location.pathname.toLowerCase() === "/user";
+  const isInvoiceScanningRoute = location.pathname.toLowerCase() === "/card";
 
   const handleLogout = () => {
     toast.success("Logged Out Successfully");
@@ -288,6 +296,8 @@ function PersistentDrawerLeft() {
           >
             {selectedMenu}
           </span>
+
+          {/* Table List button for User route */}
           {isUserRoute && (
             <Button
               variant="contained"
@@ -303,6 +313,25 @@ function PersistentDrawerLeft() {
               }}
             >
               Table List
+            </Button>
+          )}
+
+          {/* Data Table button for Invoice Scanning route */}
+          {isInvoiceScanningRoute && (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<TableChartIcon />}
+              onClick={handleDataTableClick}
+              sx={{
+                backgroundColor: "rgba(255, 255, 255, 0.1)",
+                "&:hover": {
+                  backgroundColor: "rgba(255, 255, 255, 0.2)",
+                },
+                textTransform: "none",
+              }}
+            >
+              Data Table
             </Button>
           )}
         </Toolbar>
@@ -353,6 +382,7 @@ function PersistentDrawerLeft() {
         </DrawerHeader>
         <Divider />
         <List>
+          {/* 1. Dashboard */}
           <ListItemWithTooltip tooltip="Dashboard">
             <ListItem disablePadding>
               <ListItemButton
@@ -370,6 +400,7 @@ function PersistentDrawerLeft() {
             </ListItem>
           </ListItemWithTooltip>
 
+          {/* 2. Part Master */}
           <ListItemWithTooltip tooltip="Part Master">
             <ListItem disablePadding>
               <ListItemButton
@@ -428,23 +459,25 @@ function PersistentDrawerLeft() {
             </List>
           </Collapse>
 
-          <ListItemWithTooltip tooltip="Printer Config">
+          {/* 3. Invoice Scanning */}
+          <ListItemWithTooltip tooltip="Invoice Scanning">
             <ListItem disablePadding>
               <ListItemButton
-                selected={isActive("/Printer")}
+                selected={isActive("/Card")}
                 onClick={() =>
-                  handleMenuClick("🖨️ Printer Configuration", null, "/Printer")
+                  handleMenuClick("📱 Invoice Scanning", null, "/Card")
                 }
-                sx={getMenuItemStyle(isActive("/Printer"))}
+                sx={getMenuItemStyle(isActive("/Card"))}
               >
                 <ListItemIcon>
-                  <PiPrinterFill className="h-[2rem] w-[2rem]" />
+                  <QrCodeScannerIcon />
                 </ListItemIcon>
-                {open && <ListItemText primary="Printer" />}
+                {open && <ListItemText primary="Invoice Scanning" />}
               </ListItemButton>
             </ListItem>
           </ListItemWithTooltip>
 
+          {/* 4. Dispatch */}
           <ListItemWithTooltip tooltip="Dispatch">
             <ListItem disablePadding>
               <ListItemButton
@@ -460,17 +493,20 @@ function PersistentDrawerLeft() {
             </ListItem>
           </ListItemWithTooltip>
 
-          <ListItemWithTooltip tooltip="Job Card">
+          {/* 5. User Master (Previously Printer) */}
+          <ListItemWithTooltip tooltip="User Master">
             <ListItem disablePadding>
               <ListItemButton
-                selected={isActive("/Card")}
-                onClick={() => handleMenuClick("📱 Job Card", null, "/Card")}
-                sx={getMenuItemStyle(isActive("/Card"))}
+                selected={isActive("/Printer")}
+                onClick={() =>
+                  handleMenuClick("👤 User Master", null, "/Printer")
+                }
+                sx={getMenuItemStyle(isActive("/Printer"))}
               >
                 <ListItemIcon>
-                  <QrCodeScannerIcon />
+                  <PersonIcon />
                 </ListItemIcon>
-                {open && <ListItemText primary="Job Card" />}
+                {open && <ListItemText primary="User Master" />}
               </ListItemButton>
             </ListItem>
           </ListItemWithTooltip>
@@ -519,6 +555,7 @@ function PersistentDrawerLeft() {
           <Route path="/part_Table" element={<PartTable />} />
           <Route path="/user" element={<User />} />
           <Route path="/table_List" element={<PackageTable />} />
+          <Route path="/Data_Table" element={<DataTable />} />
           <Route path="/Printer" element={<PrinterConnection />} />
           <Route path="/Card" element={<JobCard />} />
         </Routes>

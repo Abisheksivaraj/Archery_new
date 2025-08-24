@@ -1,24 +1,20 @@
 const mongoose = require("mongoose");
 
 const partSchema = new mongoose.Schema({
-  partName: {
-    type: String,
-    required: true,
-  },
   partNo: {
     type: String,
     required: true,
+    unique: true,
   },
-  quantity: {
+  description: {
     type: String,
     required: true,
   },
-  labelSize: {
-    type: String,
+  binQuantity: {
+    type: Number,
     required: true,
-    enum: ["4 inch", "6 inch"],
+    min: 0,
   },
-
   createdAt: {
     type: Date,
     default: Date.now,

@@ -245,7 +245,7 @@ const Table = () => {
                   <th className="py-3 px-6 text-center">S.no</th>
                   <th className="py-3 px-6 text-center">Part Name</th>
                   <th className="py-3 px-6 text-center">Part No</th>
-                  <th className="py-3 px-6 text-center">Packing Quantity</th>
+                  <th className="py-3 px-6 text-center">Bin Quantity</th>
                   <th className="py-3 px-6 text-center">Actions</th>
                 </tr>
               </thead>
@@ -265,21 +265,6 @@ const Table = () => {
                       {part.quantity}
                     </td>
                     <td className="flex items-center justify-center h-20 gap-2 py-3 px-6 border-b border-gray-700">
-                      <Tooltip title="Preview">
-                        <Button
-                          onClick={() => handlePreview(part)}
-                          variant="contained"
-                          style={{
-                            backgroundColor: "white",
-                            color: "white",
-                            padding: "8px 16px",
-                            borderRadius: "8px",
-                          }}
-                        >
-                          🧐
-                        </Button>
-                      </Tooltip>
-
                       <Tooltip title="Edit">
                         <Button
                           onClick={() => handleEdit(part)}
@@ -358,9 +343,7 @@ const Table = () => {
         <DialogTitle className="text-center font-bold text-xl">
           <div className="flex flex-col items-center border-b-2 border-yellow-500 pb-4">
             <span className="text-yellow-500 text-3xl">⚠️</span>
-            <span className="mt-2 text-yellow-500">
-              WARNING: Part Deletion
-            </span>
+            <span className="mt-2 text-yellow-500">WARNING: Part Deletion</span>
           </div>
         </DialogTitle>
         <DialogContent>

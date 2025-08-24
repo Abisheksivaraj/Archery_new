@@ -4,10 +4,17 @@ const Part = require("../models/PartModels");
 
 route.post("/addPart", async (req, res) => {
   try {
-    const { partName, partNo, quantity, labelSize } = req.body;
+    const { partNo, description, binQuantity } = req.body;
 
-    if (!partName || !partNo || !quantity || !labelSize) {
+    if (!partNo || !description || !binQuantity) {
       return res.status(400).json({ message: "Enter the missing fields" });
+    }
+
+    // Validate binQuantity is a positive number
+    if (binQuantity < 0) {
+      return res
+        .status(400)
+        .json({ message: "Bin quantity must be a positive number" });
     }
 
     const existingPart = await Part.findOne({ partNo });
@@ -16,10 +23,9 @@ route.post("/addPart", async (req, res) => {
     }
 
     const newPart = new Part({
-      partName,
       partNo,
-      quantity,
-      labelSize,
+      description,
+      binQuantity,
     });
 
     await newPart.save();
@@ -31,21 +37,9 @@ route.post("/addPart", async (req, res) => {
   }
 });
 
-route.get("/getLabelSize/:partNo", async (req, res) => {
-  try {
-    const label = await Part.findOne({ partNo: req.params.partNo });
-    if (!label) {
-      return res.status(404).json({ error: "Part No not found" });
-    }
-    res.json({ labelSize: label.labelSize });
-  } catch (error) {
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
 route.get("/getAllParts", async (req, res) => {
   try {
-    const parts = await Part.find();
+    const parts = await Part.find().sort({ createdAt: -1 });
 
     if (parts.length === 0) {
       return res.status(404).json({ message: "No parts found" });
@@ -58,12 +52,24 @@ route.get("/getAllParts", async (req, res) => {
   }
 });
 
+route.get("/getPart/:partNo", async (req, res) => {
+  try {
+    const part = await Part.findOne({ partNo: req.params.partNo });
+    if (!part) {
+      return res.status(404).json({ error: "Part not found" });
+    }
+    res.json({ message: "Part retrieved successfully", part });
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 route.put("/editPart/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { partName, quantity, partNo } = req.body;
+    const { partNo, description, binQuantity } = req.body;
 
-    if (!partName && quantity && partNo === undefined) {
+    if (!partNo && !description && binQuantity === undefined) {
       return res.status(400).json({ message: "No fields to update" });
     }
 
@@ -73,14 +79,27 @@ route.put("/editPart/:id", async (req, res) => {
       return res.status(404).json({ message: "Part not found" });
     }
 
-    if (partName) {
-      part.partName = partName;
+    // Check if part number already exists (if being updated)
+    if (partNo && partNo !== part.partNo) {
+      const existingPart = await Part.findOne({ partNo });
+      if (existingPart) {
+        return res.status(400).json({ message: "Part number already exists" });
+      }
     }
+
     if (partNo) {
       part.partNo = partNo;
     }
-    if (quantity !== undefined) {
-      part.quantity = quantity;
+    if (description) {
+      part.description = description;
+    }
+    if (binQuantity !== undefined) {
+      if (binQuantity < 0) {
+        return res
+          .status(400)
+          .json({ message: "Bin quantity must be a positive number" });
+      }
+      part.binQuantity = binQuantity;
     }
 
     await part.save();
