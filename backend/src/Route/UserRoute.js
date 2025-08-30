@@ -2,13 +2,8 @@ const express = require("express");
 const router = express.Router();
 const User = require("../models/UserModel");
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken"); // Add this import
 const authMiddleware = require("../middleware/auth");
 const mongoose = require("mongoose");
-
-// JWT Secret - should be in environment variables
-const JWT_SECRET =
-  process.env.JWT_SECRET || "your-secret-key-here-change-in-production";
 
 // Get all users
 router.get("/users", authMiddleware, async (req, res) => {
@@ -169,6 +164,7 @@ router.put("/users/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// Delete user
 // Delete user - handles both MongoDB _id and employeeId
 router.delete("/users/:id", authMiddleware, async (req, res) => {
   try {
@@ -202,17 +198,14 @@ router.delete("/users/:id", authMiddleware, async (req, res) => {
   }
 });
 
-// FIXED Login route with JWT token generation
+// Login route
 router.post("/userLogin", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    console.log("Login attempt for email:", email);
-
     // Find user by email
     const user = await User.findOne({ email });
     if (!user) {
-      console.log("User not found for email:", email);
       return res
         .status(401)
         .json({ success: false, message: "Invalid credentials" });
@@ -221,38 +214,22 @@ router.post("/userLogin", async (req, res) => {
     // Check password
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      console.log("Invalid password for user:", email);
       return res
         .status(401)
         .json({ success: false, message: "Invalid credentials" });
     }
 
-    // Check if user is active
+    // ✅ Corrected status check
     if (user.status !== "Active") {
-      console.log("Inactive user login attempt:", email);
       return res
         .status(401)
         .json({ success: false, message: "Account is inactive" });
     }
 
-    // Generate JWT token
-    const token = jwt.sign(
-      {
-        userId: user._id,
-        email: user.email,
-        role: user.role,
-      },
-      JWT_SECRET,
-      { expiresIn: "24h" } // Token expires in 24 hours
-    );
-
-    console.log("Login successful for user:", email);
-
-    // Return success response with token and user data
+    // Return user without password (JWT can be added later)
     res.json({
       success: true,
       message: "Login successful",
-      token: token, // This is what the frontend expects
       user: {
         _id: user._id,
         name: user.name,
@@ -265,7 +242,6 @@ router.post("/userLogin", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("Login error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });

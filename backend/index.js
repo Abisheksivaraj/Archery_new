@@ -37,7 +37,7 @@ app.use(
 
 app.use(
   cors({
-    origin: "https://lucas-tvs.onrender.com/", // Allow requests from this origin
+    origin: "*", // Allow requests from this origin
     // origin: "http://localhost:5173",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Allowed methods
     allowedHeaders: ["Content-Type", "Authorization"], // Allowed headers
@@ -54,7 +54,7 @@ app.get("/", (req, res) => {
 
 // Import and use routes
 const adminRoute = require("./src/Route/AdminRoute");
-app.use("/api/admin", adminRoute);
+app.use(adminRoute);
 
 const partRoutes = require("./src/Route/PartRoute");
 app.use(partRoutes);
@@ -76,7 +76,7 @@ const rawScansRoutes = require("./src/Route/MachineRoute");
 app.use("/api/raw-scans", rawScansRoutes);
 
 const userRoutes = require("./src/Route/UserRoute");
-app.use("/api/user", userRoutes);
+app.use(userRoutes);
 
 // 404 handler for debugging
 app.use("*", (req, res) => {
