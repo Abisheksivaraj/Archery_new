@@ -76,7 +76,7 @@ const rawScansRoutes = require("./src/Route/MachineRoute");
 app.use("/api/raw-scans", rawScansRoutes);
 
 const userRoutes = require("./src/Route/UserRoute");
-app.use(userRoutes);
+app.use("/api/user", userRoutes);
 
 // 404 handler for debugging
 app.use("*", (req, res) => {
