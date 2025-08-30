@@ -22,8 +22,7 @@ import ExpandLess from "@mui/icons-material/ExpandLess";
 import ExpandMore from "@mui/icons-material/ExpandMore";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import { useLocation, useNavigate } from "react-router-dom";
-import { Routes, Route } from "react-router-dom";
+import { useLocation, useNavigate, Routes, Route } from "react-router-dom";
 import Tooltip from "@mui/material/Tooltip";
 import logo from "../assets/logo.png";
 import companyLogo from "../assets/companyLogo.png";
@@ -32,17 +31,17 @@ import PartMaster from "./PartMaster";
 import PartTable from "./PartTable";
 import User from "./dispatch";
 import JobCard from "./JobCard";
-import { toast, Toaster } from "react-hot-toast";
+import { toast } from "react-hot-toast";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
-
 import { Button } from "@mui/material";
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import PackageTable from "./PackageTable";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { FaBoxOpen } from "react-icons/fa";
-import { PiPrinterFill } from "react-icons/pi";
 import PrinterConnection from "./Printer";
 import DataTable from "./DataTable";
+import Profile from "./Profile";
+import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 
 const drawerWidth = 240;
 const primaryColor = "#448ee4";
@@ -113,9 +112,63 @@ function PersistentDrawerLeft() {
     return localStorage.getItem("selectedMenu") || "";
   });
 
+  const [permissions, setPermissions] = useState({});
+  const [role, setRole] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
   const [activePath, setActivePath] = useState("/");
+
+  // Load permissions + role
+  useEffect(() => {
+    try {
+      const storedPermissions = localStorage.getItem("permissions");
+      if (storedPermissions) {
+        setPermissions(JSON.parse(storedPermissions) || {});
+      } else {
+        setPermissions({});
+      }
+
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        const parsedUser = JSON.parse(storedUser);
+        setRole(parsedUser.role || "");
+        console.log("User role loaded:", parsedUser.role);
+      } else {
+        setRole(localStorage.getItem("role") || "");
+      }
+    } catch (error) {
+      console.warn("Failed to parse from localStorage:", error);
+      setPermissions({});
+      setRole("");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // ✅ Cleaner isAdmin function
+  const isAdmin = () => {
+    return role && role.toLowerCase() === "admin";
+  };
+
+  // ✅ Permission check
+  const hasPermission = (perm) => {
+    if (isAdmin()) return true; // Admin sees all
+
+    const permissionMap = {
+      manage_parts: "partMaster",
+      view_dispatch: "dispatch",
+      scan_invoice: "scanner",
+      manage_users: "Admin",
+    };
+
+    const actualPermissionKey = permissionMap[perm];
+    return (
+      permissions &&
+      typeof permissions === "object" &&
+      permissions[actualPermissionKey] === true
+    );
+  };
 
   useEffect(() => {
     setActivePath(location.pathname);
@@ -124,15 +177,15 @@ function PersistentDrawerLeft() {
       localStorage.setItem("dropdownOpen", JSON.stringify(true));
     }
 
-    // Updated pathToMenuMap - only store string labels, not objects
     const pathToMenuMap = {
       "/": "📊 Dashboard",
       "/dashboard": "📊 Dashboard",
       "/part": "🛠️ Part Master > Add",
       "/part_Table": "🛠️ Part Master > Table",
       "/Card": "📱 Invoice Scanning",
-      "/User": "📦 Dispatch",
-      "/Printer": "👤 User Master",
+      "/dispatch": "📦 Dispatch",
+      "/user": "👤 User Master",
+      "/profile": "👤 User Profile", // Add this line
     };
 
     const currentMenu = pathToMenuMap[location.pathname];
@@ -168,11 +221,9 @@ function PersistentDrawerLeft() {
     const newSelectedMenu = `${menu}${submenu ? ` > ${submenu}` : ""}`;
     setSelectedMenu(newSelectedMenu);
     localStorage.setItem("selectedMenu", newSelectedMenu);
-
     if (!submenu) {
       setOpen(false);
     }
-
     navigate(path);
   };
 
@@ -182,35 +233,19 @@ function PersistentDrawerLeft() {
   const getMenuItemStyle = (isSelected) => ({
     "&.Mui-selected": {
       bgcolor: `${primaryColor}15`,
-      "&:hover": {
-        bgcolor: `${primaryColor}25`,
-      },
-      "& .MuiListItemIcon-root": {
-        color: primaryColor,
-      },
-      "& .MuiListItemText-primary": {
-        color: primaryColor,
-        fontWeight: "bold",
-      },
+      "&:hover": { bgcolor: `${primaryColor}25` },
+      "& .MuiListItemIcon-root": { color: primaryColor },
+      "& .MuiListItemText-primary": { color: primaryColor, fontWeight: "bold" },
     },
     ...(isSelected && {
       bgcolor: `${primaryColor}15`,
-      "&:hover": {
-        bgcolor: `${primaryColor}25`,
-      },
-      "& .MuiListItemIcon-root": {
-        color: primaryColor,
-      },
-      "& .MuiListItemText-primary": {
-        color: primaryColor,
-        fontWeight: "bold",
-      },
+      "&:hover": { bgcolor: `${primaryColor}25` },
+      "& .MuiListItemIcon-root": { color: primaryColor },
+      "& .MuiListItemText-primary": { color: primaryColor, fontWeight: "bold" },
     }),
     "&:hover": {
       bgcolor: `${primaryColor}10`,
-      "& .MuiListItemIcon-root": {
-        color: primaryColor,
-      },
+      "& .MuiListItemIcon-root": { color: primaryColor },
     },
   });
 
@@ -218,12 +253,8 @@ function PersistentDrawerLeft() {
     pl: 4,
     "&.Mui-selected": {
       bgcolor: `${dropdownColor}15`,
-      "&:hover": {
-        bgcolor: `${dropdownColor}25`,
-      },
-      "& .MuiListItemIcon-root": {
-        color: dropdownColor,
-      },
+      "&:hover": { bgcolor: `${dropdownColor}25` },
+      "& .MuiListItemIcon-root": { color: dropdownColor },
       "& .MuiListItemText-primary": {
         color: dropdownColor,
         fontWeight: "bold",
@@ -231,12 +262,8 @@ function PersistentDrawerLeft() {
     },
     ...(isSelected && {
       bgcolor: `${dropdownColor}15`,
-      "&:hover": {
-        bgcolor: `${dropdownColor}25`,
-      },
-      "& .MuiListItemIcon-root": {
-        color: dropdownColor,
-      },
+      "&:hover": { bgcolor: `${dropdownColor}25` },
+      "& .MuiListItemIcon-root": { color: dropdownColor },
       "& .MuiListItemText-primary": {
         color: dropdownColor,
         fontWeight: "bold",
@@ -244,9 +271,7 @@ function PersistentDrawerLeft() {
     }),
     "&:hover": {
       bgcolor: `${dropdownColor}10`,
-      "& .MuiListItemIcon-root": {
-        color: dropdownColor,
-      },
+      "& .MuiListItemIcon-root": { color: dropdownColor },
     },
   });
 
@@ -260,24 +285,33 @@ function PersistentDrawerLeft() {
     );
   };
 
-  const handleTableListClick = () => {
-    console.log("Opening table list...");
-    navigate("/table_List");
-  };
+  const handleTableListClick = () => navigate("/table_List");
+  const handleDataTableClick = () => navigate("/Data_Table");
 
-  // New handler for Data Table button
-  const handleDataTableClick = () => {
-    console.log("Opening data table...");
-    navigate("/Data_Table"); // Navigate to your data table route
-  };
-
-  const isUserRoute = location.pathname.toLowerCase() === "/user";
+  const isUserRoute = location.pathname.toLowerCase() === "/dispatch";
   const isInvoiceScanningRoute = location.pathname.toLowerCase() === "/card";
 
   const handleLogout = () => {
     toast.success("Logged Out Successfully");
+    localStorage.clear();
     navigate("/", { state: { showToast: true } });
   };
+
+  // Don't render menu items until permissions are loaded
+  if (isLoading) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          height: "100vh",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        Loading...
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ display: "flex", height: "100vh", overflow: "hidden" }}>
@@ -297,7 +331,6 @@ function PersistentDrawerLeft() {
             {selectedMenu}
           </span>
 
-          {/* Table List button for User route */}
           {isUserRoute && (
             <Button
               variant="contained"
@@ -306,9 +339,7 @@ function PersistentDrawerLeft() {
               onClick={handleTableListClick}
               sx={{
                 backgroundColor: "rgba(255, 255, 255, 0.1)",
-                "&:hover": {
-                  backgroundColor: "rgba(255, 255, 255, 0.2)",
-                },
+                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
                 textTransform: "none",
               }}
             >
@@ -316,7 +347,6 @@ function PersistentDrawerLeft() {
             </Button>
           )}
 
-          {/* Data Table button for Invoice Scanning route */}
           {isInvoiceScanningRoute && (
             <Button
               variant="contained"
@@ -325,9 +355,7 @@ function PersistentDrawerLeft() {
               onClick={handleDataTableClick}
               sx={{
                 backgroundColor: "rgba(255, 255, 255, 0.1)",
-                "&:hover": {
-                  backgroundColor: "rgba(255, 255, 255, 0.2)",
-                },
+                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.2)" },
                 textTransform: "none",
               }}
             >
@@ -352,15 +380,6 @@ function PersistentDrawerLeft() {
                 easing: theme.transitions.easing.sharp,
                 duration: theme.transitions.duration.enteringScreen,
               }),
-            "& .MuiIconButton-root": {
-              color: primaryColor,
-              "&:hover": {
-                bgcolor: `${primaryColor}10`,
-              },
-            },
-            "& .MuiDivider-root": {
-              borderColor: `${primaryColor}20`,
-            },
           },
         }}
       >
@@ -381,8 +400,9 @@ function PersistentDrawerLeft() {
           </Box>
         </DrawerHeader>
         <Divider />
+
         <List>
-          {/* 1. Dashboard */}
+          {/* Dashboard (everyone can access) */}
           <ListItemWithTooltip tooltip="Dashboard">
             <ListItem disablePadding>
               <ListItemButton
@@ -400,118 +420,138 @@ function PersistentDrawerLeft() {
             </ListItem>
           </ListItemWithTooltip>
 
-          {/* 2. Part Master */}
-          <ListItemWithTooltip tooltip="Part Master">
-            <ListItem disablePadding>
-              <ListItemButton
-                selected={isPartMasterActive()}
-                onClick={handlePartMasterClick}
-                sx={getMenuItemStyle(isPartMasterActive())}
-              >
-                <ListItemIcon>
-                  <BuildIcon />
-                </ListItemIcon>
-                {open && (
-                  <>
-                    <ListItemText primary="Part Master" />
-                    {dropdownOpen ? <ExpandLess /> : <ExpandMore />}
-                  </>
-                )}
-              </ListItemButton>
-            </ListItem>
-          </ListItemWithTooltip>
+          {/* Part Master - Show for Admin OR users with manage_parts permission */}
+          {(isAdmin() || hasPermission("manage_parts")) && (
+            <ListItemWithTooltip tooltip="Part Master">
+              <ListItem disablePadding>
+                <ListItemButton
+                  selected={isPartMasterActive()}
+                  onClick={handlePartMasterClick}
+                  sx={getMenuItemStyle(isPartMasterActive())}
+                >
+                  <ListItemIcon>
+                    <BuildIcon />
+                  </ListItemIcon>
+                  {open && (
+                    <>
+                      <ListItemText primary="Part Master" />
+                      {dropdownOpen ? <ExpandLess /> : <ExpandMore />}
+                    </>
+                  )}
+                </ListItemButton>
+              </ListItem>
+            </ListItemWithTooltip>
+          )}
 
-          <Collapse in={open && dropdownOpen} timeout="auto" unmountOnExit>
-            <List component="div" disablePadding>
-              <ListItemWithTooltip tooltip="Add Part">
-                <ListItem disablePadding>
-                  <ListItemButton
-                    selected={isActive("/part")}
-                    sx={getDropdownStyle(isActive("/part"))}
-                    onClick={() =>
-                      handleMenuClick("🛠️ Part Master", "✙ Add", "/part")
-                    }
-                  >
-                    <ListItemIcon>
-                      <AddIcon />
-                    </ListItemIcon>
-                    {open && <ListItemText primary="Add" />}
-                  </ListItemButton>
-                </ListItem>
-              </ListItemWithTooltip>
+          {/* Dropdown - Add / Table - Show for Admin OR users with manage_parts permission */}
+          {(isAdmin() || hasPermission("manage_parts")) && (
+            <Collapse in={open && dropdownOpen} timeout="auto" unmountOnExit>
+              <List component="div" disablePadding>
+                <ListItemWithTooltip tooltip="Add Part">
+                  <ListItem disablePadding>
+                    <ListItemButton
+                      selected={isActive("/part")}
+                      sx={getDropdownStyle(isActive("/part"))}
+                      onClick={() =>
+                        handleMenuClick("🛠️ Part Master", "✙ Add", "/part")
+                      }
+                    >
+                      <ListItemIcon>
+                        <AddIcon />
+                      </ListItemIcon>
+                      {open && <ListItemText primary="Add" />}
+                    </ListItemButton>
+                  </ListItem>
+                </ListItemWithTooltip>
 
-              <ListItemWithTooltip tooltip="Part Table">
-                <ListItem disablePadding>
-                  <ListItemButton
-                    selected={isActive("/part_Table")}
-                    sx={getDropdownStyle(isActive("/part_Table"))}
-                    onClick={() =>
-                      handleMenuClick("🛠️ Part Master", "Table", "/part_Table")
-                    }
-                  >
-                    <ListItemIcon>
-                      <TableChartIcon />
-                    </ListItemIcon>
-                    {open && <ListItemText primary="Table" />}
-                  </ListItemButton>
-                </ListItem>
-              </ListItemWithTooltip>
-            </List>
-          </Collapse>
+                <ListItemWithTooltip tooltip="Part Table">
+                  <ListItem disablePadding>
+                    <ListItemButton
+                      selected={isActive("/part_Table")}
+                      sx={getDropdownStyle(isActive("/part_Table"))}
+                      onClick={() =>
+                        handleMenuClick(
+                          "🛠️ Part Master",
+                          "Table",
+                          "/part_Table"
+                        )
+                      }
+                    >
+                      <ListItemIcon>
+                        <TableChartIcon />
+                      </ListItemIcon>
+                      {open && <ListItemText primary="Table" />}
+                    </ListItemButton>
+                  </ListItem>
+                </ListItemWithTooltip>
+              </List>
+            </Collapse>
+          )}
 
-          {/* 3. Invoice Scanning */}
-          <ListItemWithTooltip tooltip="Invoice Scanning">
-            <ListItem disablePadding>
-              <ListItemButton
-                selected={isActive("/Card")}
-                onClick={() =>
-                  handleMenuClick("📱 Invoice Scanning", null, "/Card")
-                }
-                sx={getMenuItemStyle(isActive("/Card"))}
-              >
-                <ListItemIcon>
-                  <QrCodeScannerIcon />
-                </ListItemIcon>
-                {open && <ListItemText primary="Invoice Scanning" />}
-              </ListItemButton>
-            </ListItem>
-          </ListItemWithTooltip>
+          {/* Invoice Scanning - Show for Admin OR users with scan_invoice permission */}
+          {(isAdmin() || hasPermission("scan_invoice")) && (
+            <ListItemWithTooltip tooltip="Invoice Scanning">
+              <ListItem disablePadding>
+                <ListItemButton
+                  selected={isActive("/Card")}
+                  onClick={() =>
+                    handleMenuClick("📱 Invoice Scanning", null, "/Card")
+                  }
+                  sx={getMenuItemStyle(isActive("/Card"))}
+                >
+                  <ListItemIcon>
+                    <QrCodeScannerIcon />
+                  </ListItemIcon>
+                  {open && <ListItemText primary="Invoice Scanning" />}
+                </ListItemButton>
+              </ListItem>
+            </ListItemWithTooltip>
+          )}
 
-          {/* 4. Dispatch */}
-          <ListItemWithTooltip tooltip="Dispatch">
-            <ListItem disablePadding>
-              <ListItemButton
-                selected={isActive("/User")}
-                onClick={() => handleMenuClick("📦 Dispatch", null, "/User")}
-                sx={getMenuItemStyle(isActive("/User"))}
-              >
-                <ListItemIcon>
-                  <FaBoxOpen className="h-[2rem] w-[2rem]" />
-                </ListItemIcon>
-                {open && <ListItemText primary="Dispatch" />}
-              </ListItemButton>
-            </ListItem>
-          </ListItemWithTooltip>
+          {/* Dispatch - Show for Admin OR users with view_dispatch permission */}
+          {(isAdmin() || hasPermission("view_dispatch")) && (
+            <ListItemWithTooltip tooltip="Dispatch">
+              <ListItem disablePadding>
+                <ListItemButton
+                  selected={isActive("/dispatch")}
+                  onClick={() =>
+                    handleMenuClick("📦 Dispatch", null, "/dispatch")
+                  }
+                  sx={getMenuItemStyle(isActive("/dispatch"))}
+                >
+                  <ListItemIcon>
+                    <FaBoxOpen className="h-[2rem] w-[2rem]" />
+                  </ListItemIcon>
+                  {open && <ListItemText primary="Dispatch" />}
+                </ListItemButton>
+              </ListItem>
+            </ListItemWithTooltip>
+          )}
 
-          {/* 5. User Master (Previously Printer) */}
-          <ListItemWithTooltip tooltip="User Master">
-            <ListItem disablePadding>
-              <ListItemButton
-                selected={isActive("/Printer")}
-                onClick={() =>
-                  handleMenuClick("👤 User Master", null, "/Printer")
-                }
-                sx={getMenuItemStyle(isActive("/Printer"))}
-              >
-                <ListItemIcon>
-                  <PersonIcon />
-                </ListItemIcon>
-                {open && <ListItemText primary="User Master" />}
-              </ListItemButton>
-            </ListItem>
-          </ListItemWithTooltip>
+          {/* User Master - Show for Admin OR users with manage_users permission */}
+          {(isAdmin() || hasPermission("manage_users")) && (
+            <ListItemWithTooltip tooltip="User Master">
+              <ListItem disablePadding>
+                <ListItemButton
+                  selected={isActive("/user")}
+                  onClick={() =>
+                    handleMenuClick("👤 User Master", null, "/user")
+                  }
+                  sx={getMenuItemStyle(isActive("/user"))}
+                >
+                  <ListItemIcon>
+                    <PersonIcon />
+                  </ListItemIcon>
+                  {open && <ListItemText primary="User Master" />}
+                </ListItemButton>
+              </ListItem>
+            </ListItemWithTooltip>
+          )}
         </List>
+
         <Divider />
+
+        {/* Expand / Collapse */}
         <Box
           sx={{
             marginTop: "auto",
@@ -527,23 +567,49 @@ function PersistentDrawerLeft() {
             </IconButton>
           </Tooltip>
         </Box>
-        <Divider sx={{ marginY: 4 }} />
+
+        <Divider sx={{ marginY: 1 }} />
+
+        {/* User Profile Button */}
+        <ListItemWithTooltip tooltip="User Profile">
+          <ListItem disablePadding>
+            <ListItemButton
+              selected={isActive("/profile")}
+              onClick={() =>
+                handleMenuClick("👤 User Profile", null, "/profile")
+              }
+              sx={getMenuItemStyle(isActive("/profile"))}
+            >
+              <ListItemIcon>
+                <AccountCircleIcon />
+              </ListItemIcon>
+              {open && <ListItemText primary="Profile" />}
+            </ListItemButton>
+          </ListItem>
+        </ListItemWithTooltip>
+
+        <Divider sx={{ marginY: 1 }} />
+
+        {/* Logout */}
         <ListItemWithTooltip tooltip="Logout">
-          <Button
-            onClick={handleLogout}
-            sx={{
-              position: "relative",
-              top: "-1rem",
-              display: "flex",
-              alignItems: "center",
-              color: "#448ee4",
-            }}
-          >
-            <LogoutIcon />
-            {open && (
-              <ListItemText primary="Logout" sx={{ color: "black", ml: -13 }} />
-            )}
-          </Button>
+          <ListItem disablePadding>
+            <ListItemButton
+              onClick={handleLogout}
+              sx={{
+                color: "#448ee4",
+                "&:hover": {
+                  bgcolor: "#448ee410",
+                  "& .MuiListItemIcon-root": { color: "#448ee4" },
+                  "& .MuiListItemText-primary": { color: "#448ee4" },
+                },
+              }}
+            >
+              <ListItemIcon>
+                <LogoutIcon />
+              </ListItemIcon>
+              {open && <ListItemText primary="Logout" />}
+            </ListItemButton>
+          </ListItem>
         </ListItemWithTooltip>
       </Drawer>
 
@@ -553,11 +619,12 @@ function PersistentDrawerLeft() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/part" element={<PartMaster />} />
           <Route path="/part_Table" element={<PartTable />} />
-          <Route path="/user" element={<User />} />
+          <Route path="/dispatch" element={<User />} />
           <Route path="/table_List" element={<PackageTable />} />
           <Route path="/Data_Table" element={<DataTable />} />
-          <Route path="/Printer" element={<PrinterConnection />} />
+          <Route path="/user" element={<PrinterConnection />} />
           <Route path="/Card" element={<JobCard />} />
+          <Route path="/profile" element={<Profile />} />
         </Routes>
       </Main>
     </Box>

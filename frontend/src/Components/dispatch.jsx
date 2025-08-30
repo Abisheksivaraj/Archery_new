@@ -34,7 +34,7 @@ import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import BackpackIcon from "@mui/icons-material/Backpack";
 import PrecisionManufacturingIcon from "@mui/icons-material/PrecisionManufacturing";
 
-const User = () => {
+const dispatch = () => {
   const theme = useTheme();
 
   // State variables
@@ -47,6 +47,7 @@ const User = () => {
     partNo: "",
     partName: "",
     quantity: "",
+    originalQuantity: "", // Store original quantity
     packageCount: 0,
   });
 
@@ -54,19 +55,23 @@ const User = () => {
     partNo: "",
     partName: "",
     quantity: "",
+    originalQuantity: "", // Store original bin quantity
   });
 
   // NEW: Separate state for Part Scanning section (keeps fields empty)
   const [partScanDetails, setPartScanDetails] = useState({
     partNo: "",
-    partName: "",
+    serialNo: "",
   });
 
   const [scanQuantity, setScanQuantity] = useState("");
   const [scannedQuantity, setScannedQuantity] = useState(0);
   const [status, setStatus] = useState("⚠️ processing");
-  const [totalPartCount, setTotalPartCount] = useState(0);
+  const [totalPartCount, setTotalPartCount] = useState(0); // Total parts scanned across all bins
   const [totalPackageCount, setTotalPackageCount] = useState(0);
+  const [scannedPartsCount, setScannedPartsCount] = useState(0); // Total scanned parts count
+  const [remainingTotalQuantity, setRemainingTotalQuantity] = useState(0); // Remaining total quantity
+  const [remainingBinQuantity, setRemainingBinQuantity] = useState(0); // Remaining bin quantity
   const [previousScanQuantity, setPreviousScanQuantity] = useState("");
   const [trackingRefresh, setTrackingRefresh] = useState(0);
   const [binQuantity, setBinQuantity] = useState("");
@@ -75,6 +80,14 @@ const User = () => {
   const [mismatchMessage, setMismatchMessage] = useState("");
   const [currentBinTag, setCurrentBinTag] = useState("");
   const [progress, setProgress] = useState(0);
+  const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
+  const [completionDialogData, setCompletionDialogData] = useState({
+    binNo: "",
+    invoiceNo: "",
+    partNo: "",
+    totalQuantity: 0,
+    scannedQuantity: 0,
+  });
 
   // NEW: Session ID for tracking related scans
   const [sessionId] = useState(
@@ -396,6 +409,20 @@ const User = () => {
     }
   };
 
+  // Helper function for pattern similarity (implement as needed)
+  const hasSimilarPattern = (candidate, reference) => {
+    // Simple implementation - you can enhance this based on your needs
+    if (candidate.length !== reference.length) return false;
+
+    let matches = 0;
+    for (let i = 0; i < candidate.length; i++) {
+      if (candidate[i] === reference[i]) matches++;
+    }
+
+    // Return true if at least 70% of characters match
+    return matches / candidate.length >= 0.7;
+  };
+
   // Enhanced function to parse machine barcode data with better part number extraction
   const parseMachineBarcode = (barcodeText) => {
     try {
@@ -505,11 +532,8 @@ const User = () => {
     }
   };
 
-  // Function to save machine scan data to database
   const saveMachineScanData = async (parsedData) => {
     try {
-      console.log("Saving machine scan data to database:", parsedData);
-
       const response = await api.post("/api/machineScan", {
         vendorCode: parsedData.vendorCode,
         date: parsedData.date,
@@ -519,7 +543,8 @@ const User = () => {
       });
 
       if (response.data.success) {
-        toast.success("Machine scan data saved successfully!");
+        // REMOVE THIS TOAST - it's redundant
+        // toast.success("Machine scan data saved successfully!");
         return response.data.data;
       } else {
         throw new Error(
@@ -529,15 +554,15 @@ const User = () => {
     } catch (error) {
       console.error("Error saving machine scan data:", error);
 
-      // Handle duplicate serial number
       if (error.response?.status === 409) {
-        toast.error("Serial number already exists in database");
+        // toast.error("Serial number already exists in database");
         return error.response.data.data;
       }
 
-      toast.error(
-        "Failed to save machine scan data: " +
-          (error.response?.data?.message || error.message)
+      // Only show error toast for actual errors
+      console.error(
+        "Failed to save machine scan data:",
+        error.response?.data?.message || error.message
       );
       throw error;
     }
@@ -757,42 +782,29 @@ const User = () => {
     }
   };
 
-  // Function to save bin data to database
   const saveBinDataToDatabase = async (parsedData) => {
     try {
-      console.log("Saving bin data to database:", parsedData);
-
       const response = await api.post("/api/bindata/qr", {
         qrCodeData: parsedData.rawQRData,
       });
 
       if (response.data.success) {
-        toast.success("Bin data saved to database successfully!");
+        // SINGLE SUCCESS TOAST
+        toast.success("New bin data saved successfully!");
         return response.data.data;
       } else {
         throw new Error(response.data.message || "Failed to save bin data");
       }
     } catch (error) {
       console.error("Error saving bin data:", error);
-      console.error("Error response:", error.response?.data);
 
-      // If bin already exists, just return the existing data
       if (error.response?.status === 409) {
-        toast.success(
-          "Bin already exists in database, loading existing data..."
-        );
+        // Don't show toast for existing bins - handled in main function
         return error.response.data.data;
       }
 
-      // Handle parsing errors specifically
       if (error.response?.status === 400) {
-        const errorMessage = error.response.data.message;
-        if (errorMessage.includes("Failed to parse QR code")) {
-          toast.error("QR Code format error: " + errorMessage);
-        } else {
-          toast.error("Validation error: " + errorMessage);
-        }
-        console.error("QR parsing failed for data:", parsedData.rawQRData);
+        toast.error("QR Code format error: " + error.response.data.message);
       } else {
         toast.error(
           "Failed to save bin data: " +
@@ -852,63 +864,6 @@ const User = () => {
           (error.response?.data?.message || error.message)
       );
       throw error;
-    }
-  };
-
-  // Function to handle printing
-  const handlePrint = (packageData = null) => {
-    try {
-      const printWindow = window.open("", "_blank");
-      const printContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Shipping Label - ${packageData?.packageNo || "Package"}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .label { border: 2px solid #000; padding: 20px; max-width: 400px; }
-            .header { text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 15px; }
-            .info { margin: 5px 0; }
-            .qr-placeholder { border: 1px solid #ccc; width: 100px; height: 100px; margin: 10px auto; display: flex; align-items: center; justify-content: center; }
-          </style>
-        </head>
-        <body>
-          <div class="label">
-            <div class="header">SHIPPING LABEL</div>
-            <div class="info"><strong>Package No:</strong> ${
-              packageData?.packageNo || "N/A"
-            }</div>
-            <div class="info"><strong>Bin No:</strong> ${currentBinTag}</div>
-            <div class="info"><strong>Part No:</strong> ${
-              binPartDetails.partNo
-            }</div>
-            <div class="info"><strong>Part Name:</strong> ${
-              binPartDetails.partName
-            }</div>
-            <div class="info"><strong>Quantity:</strong> ${
-              binPartDetails.quantity
-            }</div>
-            <div class="info"><strong>Invoice:</strong> ${selectedInvoiceNo}</div>
-            <div class="info"><strong>Date:</strong> ${new Date().toLocaleDateString()}</div>
-            <div class="info"><strong>Time:</strong> ${new Date().toLocaleTimeString()}</div>
-            <div class="qr-placeholder">QR CODE</div>
-          </div>
-        </body>
-        </html>
-      `;
-
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-
-      // Wait for content to load then print
-      setTimeout(() => {
-        printWindow.focus();
-        printWindow.print();
-        printWindow.close();
-      }, 250);
-    } catch (error) {
-      console.error("Error printing label:", error);
-      toast.error("Failed to print shipping label");
     }
   };
 
@@ -1006,13 +961,19 @@ const User = () => {
 
       if (response.data.success && response.data.data.length > 0) {
         const invoiceData = response.data.data[0];
+        const originalQuantity = parseInt(invoiceData.quantity) || 0;
 
         setInvoicePartDetails({
           partNo: invoiceData.partNumber || "",
           partName: invoiceData.partNumber || "",
-          quantity: invoiceData.quantity || "",
+          quantity: originalQuantity.toString(),
+          originalQuantity: originalQuantity.toString(),
           packageCount: 0,
         });
+
+        // Initialize remaining total quantity and scanned parts count
+        setRemainingTotalQuantity(originalQuantity);
+        setScannedPartsCount(0);
 
         // Fetch package count if part number exists
         if (invoiceData.partNumber) {
@@ -1035,8 +996,11 @@ const User = () => {
         partNo: "",
         partName: "",
         quantity: "",
+        originalQuantity: "",
         packageCount: 0,
       });
+      setRemainingTotalQuantity(0);
+      setScannedPartsCount(0);
     }
   };
 
@@ -1108,8 +1072,11 @@ const User = () => {
         partNo: "",
         partName: "",
         quantity: "",
+        originalQuantity: "",
         packageCount: 0,
       });
+      setRemainingTotalQuantity(0);
+      setScannedPartsCount(0);
     }
 
     // Reset other states
@@ -1122,146 +1089,130 @@ const User = () => {
       partNo: "",
       partName: "",
       quantity: "",
+      originalQuantity: "",
     });
     // IMPORTANT: Reset part scanning details
     setPartScanDetails({
       partNo: "",
-      partName: "",
+      serialNo: "",
     });
     setBinQuantity("");
     setCurrentBinTag("");
     setProgress(0);
+    setRemainingBinQuantity(0);
   };
 
   const handleScanQuantityChange = async (e) => {
     const value = e.target.value.trim();
     setScanQuantity(value);
 
-    // Check if this looks like QR code data (either multiline or very long single line)
-    if (value && (value.includes("\n") || value.length > 50)) {
-      try {
-        const parsedData = parseQRCodeData(value);
-
-        // Validate that the part number matches the selected invoice
-        if (
-          selectedInvoiceNo &&
-          invoicePartDetails.partNo &&
-          parsedData.partNumber !== invoicePartDetails.partNo
-        ) {
-          toast.error(
-            `Part number mismatch! Invoice part: ${invoicePartDetails.partNo}, Bin part: ${parsedData.partNumber}`
-          );
-          setScanQuantity("");
-          return;
-        }
-
-        // Check if bin already exists in database
-        const existingBinData = await fetchExistingBinData(parsedData.binNo);
-
-        let savedBinData;
-        if (existingBinData) {
-          savedBinData = existingBinData;
-          toast.success(
-            `Resuming existing bin: ${parsedData.binNo} (${
-              existingBinData.scannedQuantity || 0
-            }/${existingBinData.quantity} completed)`
-          );
-
-          setScannedQuantity(existingBinData.scannedQuantity || 0);
-          setProgress(
-            Math.round(
-              ((existingBinData.scannedQuantity || 0) /
-                existingBinData.quantity) *
-                100
-            )
-          );
-        } else {
-          savedBinData = await saveBinDataToDatabase(parsedData);
-          setScannedQuantity(0);
-          setProgress(0);
-        }
-
-        // Update ONLY bin details state - DON'T update part scanning fields
-        setBinPartDetails({
-          partNo: savedBinData.partNumber,
-          partName: savedBinData.descriptionOrPartName,
-          quantity: savedBinData.quantity.toString(),
-        });
-        setBinQuantity(savedBinData.quantity.toString());
-        setCurrentBinTag(savedBinData.binNo);
-
-        // IMPORTANT: Keep part scanning fields empty
-        // setPartScanDetails({ partNo: "", partName: "" }); // Already empty, no need to update
-
-        // Check if bin is already completed
-        if (savedBinData.status === "completed") {
-          toast.success(`Bin ${savedBinData.binNo} is already completed!`);
-          setStatus("✅ completed");
-        } else {
-          toast.success(
-            `QR Code scanned! Bin: ${savedBinData.binNo}, Part: ${savedBinData.partNumber}, Qty: ${savedBinData.quantity}`
-          );
-        }
-
-        // Clear the scan field and focus on machine barcode scanner
-        setScanQuantity("");
-        setTimeout(() => {
-          if (
-            machineBarcodeRef.current &&
-            savedBinData.status !== "completed"
-          ) {
-            machineBarcodeRef.current.focus();
-          }
-        }, 100);
-      } catch (error) {
-        console.error("Error processing QR code:", error);
-        toast.error("Failed to process QR code: " + error.message);
-        setScanQuantity("");
-      }
-      return;
+    // Clear existing timeout to prevent multiple processing
+    if (window.qrProcessingTimeout) {
+      clearTimeout(window.qrProcessingTimeout);
     }
 
-    // Legacy bin tag handling (for backward compatibility)
-    if (value && value.startsWith("BIN-")) {
-      const parts = value.split("-");
-      if (parts.length >= 4) {
-        const binPartNo = parts[1] + "-" + parts[2] + "-" + parts[3];
+    const processQRCode = async (value) => {
+      // Check if this looks like QR code data
+      if (value && (value.includes("\n") || value.length > 50)) {
+        try {
+          const parsedData = parseQRCodeData(value);
 
-        if (binPartNo === invoicePartDetails.partNo) {
-          const mockBinQuantity =
-            Math.floor(parseInt(invoicePartDetails.quantity) / 5) || 1;
+          // Validate that the part number matches the selected invoice
+          if (
+            selectedInvoiceNo &&
+            invoicePartDetails.partNo &&
+            parsedData.partNumber !== invoicePartDetails.partNo
+          ) {
+            toast.error(
+              `Part number mismatch! Invoice: ${invoicePartDetails.partNo}, Bin: ${parsedData.partNumber}`
+            );
+            setScanQuantity("");
+            return;
+          }
 
-          // Update ONLY bin details - DON'T update part scanning fields
-          setBinPartDetails({
-            partNo: invoicePartDetails.partNo,
-            partName: invoicePartDetails.partName,
-            quantity: mockBinQuantity.toString(),
-          });
-          setBinQuantity(mockBinQuantity.toString());
-          setCurrentBinTag(value);
+          // Check if this is the same bin as currently loaded
+          if (currentBinTag === parsedData.binNo) {
+            toast.success("Same bin already loaded");
+            setScanQuantity("");
+            return;
+          }
 
-          toast.success(
-            `Bin tag scanned! ${invoicePartDetails.partName} - Qty: ${mockBinQuantity}`
+          // Check if bin already exists in database
+          const existingBinData = await fetchExistingBinData(parsedData.binNo);
+
+          let savedBinData;
+          if (existingBinData) {
+            savedBinData = existingBinData;
+            // SINGLE TOAST for existing bin
+            toast.success(
+              `Loading existing bin: ${parsedData.binNo} (${
+                existingBinData.scannedQuantity || 0
+              }/${existingBinData.quantity} completed)`
+            );
+          } else {
+            savedBinData = await saveBinDataToDatabase(parsedData);
+            // SINGLE TOAST for new bin - toast already shown in saveBinDataToDatabase
+            setScannedQuantity(0);
+            setProgress(0);
+          }
+
+          // Update bin data - THIS IS THE KEY FIX FOR QR UPDATES
+          const initialBinQuantity = savedBinData.quantity;
+          const alreadyScanned = existingBinData?.scannedQuantity || 0;
+          const remainingForThisBin = Math.max(
+            0,
+            initialBinQuantity - alreadyScanned
           );
+
+          // RESET EVERYTHING FOR NEW BIN
+          setBinPartDetails({
+            partNo: savedBinData.partNumber,
+            partName: savedBinData.descriptionOrPartName,
+            quantity: savedBinData.quantity.toString(),
+            originalQuantity: savedBinData.quantity.toString(),
+          });
+          setBinQuantity(savedBinData.quantity.toString());
+          setCurrentBinTag(savedBinData.binNo);
+          setRemainingBinQuantity(remainingForThisBin);
+          setScannedQuantity(alreadyScanned); // Set to existing scanned amount
+          setProgress(Math.round((alreadyScanned / initialBinQuantity) * 100));
+
+          // Reset part scanning fields for new bin
+          setPartScanDetails({ partNo: "", serialNo: "" });
+
+          // Check completion status
+          if (
+            savedBinData.status === "completed" ||
+            alreadyScanned >= initialBinQuantity
+          ) {
+            setStatus("✅ completed");
+          } else {
+            setStatus("⚠️ processing");
+          }
 
           setScanQuantity("");
           setTimeout(() => {
-            if (machineBarcodeRef.current) {
+            if (
+              machineBarcodeRef.current &&
+              savedBinData.status !== "completed"
+            ) {
               machineBarcodeRef.current.focus();
             }
           }, 100);
-        } else {
-          toast.error(
-            `Bin tag doesn't match selected invoice part! Expected: ${invoicePartDetails.partNo}, Found: ${binPartNo}`
-          );
+        } catch (error) {
+          console.error("Error processing QR code:", error);
+          toast.error("Failed to process QR code: " + error.message);
           setScanQuantity("");
         }
-      } else {
-        toast.error("Invalid bin tag format!");
-        setScanQuantity("");
       }
-      return;
-    }
+    };
+    // Don't process if empty or too short
+    if (!value || value.length < 20) return;
+
+    // Debounce QR code processing - wait for complete input
+    window.qrProcessingTimeout = setTimeout(async () => {
+      await processQRCode(value);
+    }, 300); // Wait 300ms after user stops typing
   };
 
   // Enhanced handleMachineBarcodeChange - wait for complete barcode before processing
@@ -1284,104 +1235,97 @@ const User = () => {
     }, 100); // Wait 100ms after last character
   };
 
-  // Separate function to process the complete barcode
   const processMachineBarcode = async (rawValue) => {
     const trimmedValue = rawValue.trim();
 
-    // Don't process if trimmed value is too short
     if (!trimmedValue || trimmedValue.length < 8) {
-      console.log(
-        "Barcode too short, waiting for more input:",
-        trimmedValue.length
-      );
       return;
     }
 
     try {
-      // Store raw scan data immediately - the complete scan
+      // Store raw scan data - NO TOAST HERE
       try {
         await storeRawScanData(rawValue);
-        console.log("Raw scan data stored successfully");
       } catch (rawStoreError) {
         console.error("Failed to store raw scan data:", rawStoreError);
-        // Continue processing even if raw storage fails
       }
 
       let extractedPartNumber = "";
+      let extractedSerialNumber = "";
       let parsedData = null;
 
-      // Enhanced part number extraction with better logging
       try {
         extractedPartNumber = extractPartNumberFromBarcode(trimmedValue);
-        console.log("Successfully extracted part number:", extractedPartNumber);
       } catch (extractionError) {
-        console.error("Failed to extract part number:", extractionError);
-        console.log("Full barcode was:", trimmedValue);
-
-        // If extraction fails, check if this is a legacy single part number scan
         if (
           binPartDetails.partNo &&
           trimmedValue === binPartDetails.partNo.trim()
         ) {
           extractedPartNumber = trimmedValue;
-          console.log("Using legacy single part number:", extractedPartNumber);
         } else {
-          toast.error(
-            `Unable to extract part number from barcode: ${trimmedValue}`
-          );
+          toast.error(`Unable to extract part number from barcode`);
           setMachineBarcode("");
           return;
         }
       }
 
-      // Enhanced part number matching with detailed logging
-      console.log("Part number comparison:", {
-        expected: binPartDetails.partNo,
-        expectedTrimmed: binPartDetails.partNo?.trim(),
-        extracted: extractedPartNumber,
-        extractedTrimmed: extractedPartNumber?.trim(),
-        fullBarcode: trimmedValue,
-        isMatch: binPartDetails.partNo?.trim() === extractedPartNumber?.trim(),
-      });
+      // Parse the full barcode to get serial number and other details
+      try {
+        parsedData = parseMachineBarcode(trimmedValue);
+        extractedSerialNumber = parsedData.Serial_no;
+        console.log(
+          "Extracted serial number from parsed data:",
+          extractedSerialNumber
+        );
+      } catch (parseError) {
+        console.log(
+          "Full parsing failed, trying to extract serial number manually"
+        );
 
-      // Check if part number matches the bin part number
+        // Fallback: Try to extract last 4 digits as serial number
+        const serialMatch = trimmedValue.match(/(\d{4})$/);
+        extractedSerialNumber = serialMatch
+          ? serialMatch[1]
+          : `AUTO_${Date.now()}`;
+        console.log(
+          "Fallback serial number extraction:",
+          extractedSerialNumber
+        );
+      }
+
+      // Check part number match
       if (
         binPartDetails.partNo &&
         binPartDetails.partNo.trim() === extractedPartNumber.trim()
       ) {
-        // Part number matches - proceed with scan
+        // Update partScanDetails with BOTH partNo and serialNo
         setPartScanDetails({
           partNo: extractedPartNumber,
-          partName: binPartDetails.partName,
+          serialNo: extractedSerialNumber, // Now setting the serial number
         });
 
-        // Try to parse full machine barcode data if possible
+        // Save machine data if parsing was successful - NO TOASTS HERE
         try {
-          if (trimmedValue.includes(" ") || trimmedValue.length > 15) {
-            parsedData = parseMachineBarcode(trimmedValue);
+          if (
+            parsedData &&
+            (trimmedValue.includes(" ") || trimmedValue.length > 15)
+          ) {
             await saveMachineScanData(parsedData);
           }
         } catch (parseError) {
           console.log(
-            "Full parsing failed, proceeding with part number match:",
-            parseError
+            "Machine scan data save failed, proceeding with part number match"
           );
         }
 
-        // Save core part scan data
+        // Save part scan data - NO TOAST HERE
         const partScanData = {
           partNumber: extractedPartNumber,
           shift: parsedData?.staticshift || "1",
-          serialNumber: parsedData?.Serial_no || `AUTO_${Date.now()}`,
+          serialNumber: extractedSerialNumber, // Use extracted serial number
           date:
             parsedData?.date ||
-            new Date()
-              .toLocaleDateString("en-GB", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "2-digit",
-              })
-              .replace(/\//g, ""),
+            new Date().toLocaleDateString("en-GB").replace(/\//g, ""),
           binNumber: currentBinTag,
           invoiceNumber: selectedInvoiceNo,
           scanTimestamp: new Date().toISOString(),
@@ -1389,23 +1333,25 @@ const User = () => {
           rawBarcodeData: rawValue,
         };
 
-        savePartScanData(partScanData).catch((error) => {
-          console.error("Failed to save part scan data:", error);
-        });
+        savePartScanData(partScanData).catch(console.error);
 
         setStatus("pass");
         const newScannedQuantity = scannedQuantity + 1;
         const totalBinQuantity = Number(binPartDetails.quantity);
 
+        // Update counts
         setTotalPartCount((prev) => prev + 1);
+        setScannedPartsCount((prev) => prev + 1);
         setScannedQuantity(newScannedQuantity);
+        setRemainingTotalQuantity((prev) => Math.max(0, prev - 1));
+        setRemainingBinQuantity((prev) => Math.max(0, prev - 1));
 
         const progressPercent = Math.round(
           (newScannedQuantity / totalBinQuantity) * 100
         );
         setProgress(progressPercent);
 
-        // Update scan progress in database
+        // Update progress in database
         try {
           const progressResponse = await updateScanProgress(
             currentBinTag,
@@ -1414,61 +1360,60 @@ const User = () => {
               scannedBy: "user",
               isValid: true,
               machineData: parsedData,
-              rawBarcodeData: rawValue,
-              extractedPartNumber: extractedPartNumber,
             }
           );
 
-          if (progressResponse.isCompleted) {
+          // SINGLE TOAST - either completion or progress
+          if (
+            progressResponse.isCompleted ||
+            newScannedQuantity >= totalBinQuantity
+          ) {
             toast.success(
               `Bin ${currentBinTag} completed! All ${totalBinQuantity} parts scanned.`
             );
             setStatus("✅ completed");
           } else {
             toast.success(
-              `Part scanned! Progress: ${newScannedQuantity}/${totalBinQuantity} (${progressPercent}%)`
+              `Part scanned! ${newScannedQuantity}/${totalBinQuantity} (${progressPercent}%)`
             );
           }
         } catch (error) {
+          // Fallback toast if database update fails
           toast.success(
-            `Part scanned! Progress: ${newScannedQuantity}/${totalBinQuantity} (${progressPercent}%)`
+            `Part scanned! ${newScannedQuantity}/${totalBinQuantity} (${progressPercent}%)`
           );
         }
 
         setMachineBarcode("");
 
-        // Check if bin is complete
+        // Handle bin completion
         if (newScannedQuantity >= totalBinQuantity) {
           setTotalPackageCount((prev) => prev + 1);
-          toast.success(`Bin ${currentBinTag} completed! Creating package...`);
 
-          const packageData = await savePackageData();
-          setScannedQuantity(0);
-          setProgress(0);
+          // Show completion dialog
+          setCompletionDialogData({
+            binNo: currentBinTag,
+            invoiceNo: selectedInvoiceNo,
+            partNo: binPartDetails.partNo,
+            totalQuantity: totalBinQuantity,
+            scannedQuantity: newScannedQuantity,
+          });
+          setCompletionDialogOpen(true);
 
-          setTrackingRefresh((prev) => prev + 1);
-          setTimeout(() => {
-            handlePrint(packageData);
-          }, 500);
-
+          // Reset for next bin
           setBinPartDetails({
             partNo: "",
             partName: "",
             quantity: "",
+            originalQuantity: "",
           });
-          setPartScanDetails({
-            partNo: "",
-            partName: "",
-          });
+          setPartScanDetails({ partNo: "", serialNo: "" });
           setBinQuantity("");
           setCurrentBinTag("");
           setStatus("⚠️ processing");
-
-          setTimeout(() => {
-            if (scanQuantityRef.current) {
-              scanQuantityRef.current.focus();
-            }
-          }, 1000);
+          setRemainingBinQuantity(0);
+          setScannedQuantity(0);
+          setProgress(0);
         } else {
           setTimeout(() => {
             if (machineBarcodeRef.current) {
@@ -1476,23 +1421,12 @@ const User = () => {
             }
           }, 100);
         }
-      } else if (
-        binPartDetails.partNo &&
-        binPartDetails.partNo.trim() !== extractedPartNumber.trim()
-      ) {
-        // Part number mismatch
-        const mismatchMsg = `Part number mismatch!\nExpected: "${binPartDetails.partNo.trim()}"\nExtracted: "${extractedPartNumber.trim()}"\nFull Barcode: "${trimmedValue}"`;
-
+      } else if (binPartDetails.partNo) {
+        // Part mismatch
+        const mismatchMsg = `Part number mismatch!\nExpected: "${binPartDetails.partNo.trim()}"\nExtracted: "${extractedPartNumber.trim()}"`;
         setMismatchMessage(mismatchMsg);
         setMismatchDialogOpen(true);
         setStatus("fail");
-
-        console.error("Part number mismatch details:", {
-          expected: binPartDetails.partNo?.trim(),
-          extracted: extractedPartNumber?.trim(),
-          fullBarcode: trimmedValue,
-          rawBarcode: rawValue,
-        });
 
         setTimeout(() => {
           setMachineBarcode("");
@@ -1500,15 +1434,10 @@ const User = () => {
             machineBarcodeRef.current.focus();
           }
         }, 500);
-      } else if (!binPartDetails.partNo) {
-        toast.error(
-          "Please scan a bin QR code first to set the expected part number"
-        );
-        setMachineBarcode("");
       }
     } catch (error) {
       console.error("Error processing machine barcode:", error);
-      toast.error("Failed to process machine barcode: " + error.message);
+      toast.error("Failed to process barcode");
       setMachineBarcode("");
     }
   };
@@ -1518,6 +1447,11 @@ const User = () => {
       setTotalPartCount(0);
       setTotalPackageCount(0);
       setScannedQuantity(0);
+      setScannedPartsCount(0);
+      setRemainingTotalQuantity(
+        parseInt(invoicePartDetails.originalQuantity) || 0
+      );
+      setRemainingBinQuantity(parseInt(binPartDetails.originalQuantity) || 0);
       setProgress(0);
       toast.success("All counts reset successfully");
     } catch (error) {
@@ -1578,17 +1512,296 @@ const User = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Header */}
-      <Paper
-        sx={{ p: 1, bgcolor: "primary.light", color: "primary.contrastText" }}
+      {/* Completion Dialog */}
+      {/* Industrial-Style Completion Dialog */}
+      <Dialog
+        open={completionDialogOpen}
+        onClose={() => setCompletionDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.08)",
+            border: "1px solid #E8E8E8",
+          },
+        }}
       >
-        <Typography variant="body2" textAlign="center">
-          <strong>Invoice Processing System:</strong> Select Invoice → Scan QR
-          Code → Scan Parts → Raw Data Auto-Stored
-        </Typography>
-      </Paper>
+        <DialogTitle
+          sx={{
+            bgcolor: "#F8F9FA", // Light gray background
+            color: "#2C3E50", // Dark blue-gray text
+            textAlign: "center",
+            py: 3,
+            position: "relative",
+            borderBottom: "2px solid #E3F2FD",
+            "&::before": {
+              content: '""',
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: "4px",
+              bgcolor: "#64B5F6", // Light blue accent
+            },
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 2,
+            }}
+          >
+            <Box
+              sx={{
+                width: 48,
+                height: 48,
+                borderRadius: "50%",
+                bgcolor: "#E8F5E8", // Very light green
+                border: "2px solid #81C784",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "24px",
+                color: "#4CAF50",
+              }}
+            >
+              ✓
+            </Box>
+            <Box>
+              <Typography variant="h5" fontWeight="600" color="#2C3E50">
+                BIN PROCESSING COMPLETE
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ opacity: 0.7, mt: 0.5, color: "#64B5F6" }}
+              >
+                Verified
+              </Typography>
+            </Box>
+          </Box>
+        </DialogTitle>
 
-      <Container maxWidth="xl" sx={{ flex: 1, py: 1, overflow: "hidden" }}>
+        <DialogContent sx={{ p: 0 }}>
+          {/* Status Banner */}
+          <Box
+            sx={{
+              bgcolor: "#F0F8F0", // Very light green background
+              borderLeft: "4px solid #81C784",
+              p: 2,
+              display: "flex",
+              alignItems: "center",
+              gap: 2,
+            }}
+          >
+            <Box
+              sx={{
+                width: 12,
+                height: 12,
+                borderRadius: "50%",
+                bgcolor: "#4CAF50",
+                animation: "pulse 2s infinite",
+                "@keyframes pulse": {
+                  "0%": {
+                    opacity: 1,
+                  },
+                  "50%": {
+                    opacity: 0.5,
+                  },
+                  "100%": {
+                    opacity: 1,
+                  },
+                },
+              }}
+            />
+            <Typography variant="body1" fontWeight="600" color="#2E7D32">
+              All {completionDialogData.totalQuantity} components successfully
+              processed and verified
+            </Typography>
+          </Box>
+
+          {/* Data Grid */}
+          <Box sx={{ p: 3 }}>
+            <Grid container spacing={3}>
+              {/* Production Details */}
+              <Grid item xs={12}>
+                <Typography
+                  variant="overline"
+                  sx={{
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    color: "#64B5F6",
+                    letterSpacing: "0.1em",
+                  }}
+                >
+                  PRODUCTION DETAILS
+                </Typography>
+                <Box sx={{ mt: 1, mb: 2, height: "2px", bgcolor: "#E3F2FD" }} />
+              </Grid>
+
+              <Grid item xs={6} md={5}>
+                <Box sx={{ textAlign: "center" }}>
+                  <Typography
+                    variant="caption"
+                    color="#78909C"
+                    sx={{ textTransform: "uppercase", letterSpacing: "0.05em" }}
+                  >
+                   Bin No
+                  </Typography>
+                  <Typography
+                    variant="h6"
+                    fontWeight="bold"
+                    sx={{ mt: 0.5, fontFamily: "monospace", color: "#37474F" }}
+                  >
+                    {completionDialogData.binNo}
+                  </Typography>
+                </Box>
+              </Grid>
+
+              <Grid item xs={6} md={3}>
+                <Box sx={{ textAlign: "center" }}>
+                  <Typography
+                    variant="caption"
+                    color="#78909C"
+                    sx={{ textTransform: "uppercase", letterSpacing: "0.05em" }}
+                  >
+                    Part Number
+                  </Typography>
+                  <Typography
+                    variant="h6"
+                    fontWeight="bold"
+                    sx={{ mt: 0.5, fontFamily: "monospace", color: "#37474F" }}
+                  >
+                    {completionDialogData.partNo}
+                  </Typography>
+                </Box>
+              </Grid>
+
+              <Grid item xs={6} md={3}>
+                <Box sx={{ textAlign: "center" }}>
+                  <Typography
+                    variant="caption"
+                    color="#78909C"
+                    sx={{ textTransform: "uppercase", letterSpacing: "0.05em" }}
+                  >
+                    Quantity
+                  </Typography>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      mt: 0.5,
+                    }}
+                  >
+                    <Typography variant="h5" fontWeight="bold" color="#4CAF50">
+                      {completionDialogData.scannedQuantity}
+                    </Typography>
+                    <Typography variant="h6" color="#78909C" sx={{ mx: 0.5 }}>
+                      /
+                    </Typography>
+                    <Typography variant="h6" color="#78909C">
+                      {completionDialogData.totalQuantity}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Grid>
+
+              {/* Process Summary */}
+              <Grid item xs={12}>
+                <Box
+                  sx={{
+                    mt: 2,
+                    p: 2.5,
+                    bgcolor: "#FAFBFC", // Very light blue-gray
+                    borderRadius: 2,
+                    border: "1px solid #E1F5FE",
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    color="#455A64"
+                    sx={{ textAlign: "center", lineHeight: 1.6 }}
+                  >
+                    <strong style={{ color: "#2C3E50" }}>
+                      PROCESS SUMMARY:
+                    </strong>{" "}
+                    Bin no: {completionDialogData.binNo} has been successfully
+                    processed with all {completionDialogData.totalQuantity}{" "}
+                    components scanned, verified, and approved for next stage
+                    operations.
+                  </Typography>
+                </Box>
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            p: 3,
+            bgcolor: "#F8F9FA",
+            justifyContent: "space-between",
+            borderTop: "2px solid #E3F2FD",
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                bgcolor: "#4CAF50",
+              }}
+            />
+            <Typography variant="body2" color="#64B5F6" fontWeight="500">
+              Ready for next operation
+            </Typography>
+          </Box>
+
+          <Button
+            onClick={() => setCompletionDialogOpen(false)}
+            variant="contained"
+            size="large"
+            sx={{
+              bgcolor: "#64B5F6", // Light blue
+              color: "white",
+              px: 4,
+              py: 1.5,
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              borderRadius: 2,
+              boxShadow: "0 4px 12px rgba(100, 181, 246, 0.3)",
+              "&:hover": {
+                bgcolor: "#42A5F5",
+                boxShadow: "0 6px 16px rgba(100, 181, 246, 0.4)",
+              },
+            }}
+          >
+            Continue Production
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add pulse animation */}
+      <style jsx global>{`
+        @keyframes pulse {
+          0% {
+            box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+          }
+          70% {
+            box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+          }
+        }
+      `}</style>
+
+      <Container maxWidth="xl" sx={{ flex: 1, overflow: "hidden" }}>
         <Grid container spacing={1} sx={{ height: "100%" }}>
           {/* Left Column - Input Forms */}
           <Grid item xs={12} md={8} sx={{ height: "100%" }}>
@@ -1648,10 +1861,11 @@ const User = () => {
                   <Grid item xs={4}>
                     <TextField
                       label="Total Quantity"
-                      value={invoicePartDetails.quantity}
+                      value={remainingTotalQuantity}
                       fullWidth
                       size="small"
                       InputProps={{ readOnly: true }}
+                      helperText={`Original: ${invoicePartDetails.originalQuantity}`}
                     />
                   </Grid>
                 </Grid>
@@ -1673,12 +1887,16 @@ const User = () => {
                       variant="caption"
                       sx={{
                         ml: 2,
-                        color: "success.main",
                         fontWeight: "bold",
-                        fontSize: "0.75rem",
+                        fontSize: "0.85rem", // slightly bigger for readability
                       }}
                     >
-                      Current: {currentBinTag}
+                      <span style={{ color: "#1976d2" }}>Current Bin:</span>{" "}
+                      <span style={{ color: "#2e7d32" }}>{currentBinTag}</span>{" "}
+                      | <span style={{ color: "#1976d2" }}>Part Name:</span>{" "}
+                      <span style={{ color: "#2e7d32" }}>
+                        {binPartDetails.partName}
+                      </span>
                     </Typography>
                   )}
                 </Box>
@@ -1716,10 +1934,11 @@ const User = () => {
                   <Grid item xs={4}>
                     <TextField
                       label="Bin Qty"
-                      value={binQuantity}
+                      value={remainingBinQuantity}
                       fullWidth
                       size="small"
                       InputProps={{ readOnly: true }}
+                      helperText={`Original: ${binPartDetails.originalQuantity}`}
                     />
                   </Grid>
                 </Grid>
@@ -1742,7 +1961,7 @@ const User = () => {
                       sx={{ mr: 1 }}
                     />
                     <Typography variant="h6" color="primary">
-                      Part Scanning (Raw Data Auto-Stored)
+                      Part Scanning
                     </Typography>
                   </Box>
                   {binPartDetails.partNo && (
@@ -1763,7 +1982,6 @@ const User = () => {
                       autoComplete="off"
                       placeholder="Scan: L012331400M52T1001082512833"
                       disabled={!binPartDetails.partNo}
-                      helperText="Raw data automatically stored on each scan"
                     />
                   </Grid>
                   <Grid item xs={4}>
@@ -1778,10 +1996,23 @@ const User = () => {
                   <Grid item xs={4}>
                     <TextField
                       label="Serial Number"
-                      value={partScanDetails.partName}
+                      value={partScanDetails.serialNo}
                       fullWidth
                       size="small"
-                      InputProps={{ readOnly: true }}
+                      InputProps={{
+                        readOnly: true,
+                        style: {
+                          fontSize: "0.875rem", // Ensure proper font size
+                          padding: "8px 12px", // Add proper padding
+                        },
+                      }}
+                      InputLabelProps={{
+                        shrink: true, // Keep label always shrunk to avoid overlap
+                        style: {
+                          fontSize: "0.875rem",
+                          transform: "translate(14px, -6px) scale(0.75)", // Position label correctly
+                        },
+                      }}
                     />
                   </Grid>
                 </Grid>
@@ -1884,7 +2115,12 @@ const User = () => {
                     <Typography variant="body2" color="primary">
                       Total Quantity
                     </Typography>
-                    <Typography variant="h4">{totalPartCount}</Typography>
+                    <Typography variant="h4">
+                      {remainingTotalQuantity}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Remaining from invoice
+                    </Typography>
                   </Paper>
                 </Grid>
                 <Grid item xs={6}>
@@ -1893,17 +2129,21 @@ const User = () => {
                     <Typography variant="body2" color="primary">
                       Bin Quantity
                     </Typography>
-                    <Typography variant="h4">{totalPackageCount}</Typography>
+                    <Typography variant="h4">{remainingBinQuantity}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Remaining in current bin
+                    </Typography>
                   </Paper>
                 </Grid>
                 <Grid item xs={6}>
                   <Paper sx={{ p: 1.5, textAlign: "center" }}>
                     <BackpackIcon color="primary" />
                     <Typography variant="body2" color="primary">
-                      Total Scanned Part 
+                      Scanned Parts Count
                     </Typography>
-                    <Typography variant="h4">
-                      {invoicePartDetails.packageCount || 0}
+                    <Typography variant="h4">{scannedPartsCount}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Total parts scanned
                     </Typography>
                   </Paper>
                 </Grid>
@@ -1911,12 +2151,15 @@ const User = () => {
                   <Paper sx={{ p: 1.5, textAlign: "center" }}>
                     <QrCodeScannerIcon color="secondary" />
                     <Typography variant="body2" color="primary">
-                      Bin Count
+                      Bin Progress
                     </Typography>
                     <Typography variant="h4">
                       {binPartDetails.quantity
                         ? `${scannedQuantity}/${binPartDetails.quantity}`
                         : "0/0"}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Current bin progress
                     </Typography>
                   </Paper>
                 </Grid>
@@ -1936,41 +2179,43 @@ const User = () => {
                       <strong>Part:</strong> {invoicePartDetails.partNo}
                     </Typography>
                     <Typography variant="caption" display="block">
-                      <strong>Total Qty:</strong> {invoicePartDetails.quantity}
+                      <strong>Original Qty:</strong>{" "}
+                      {invoicePartDetails.originalQuantity}
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                      <strong>Remaining:</strong> {remainingTotalQuantity}
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                      <strong>Scanned:</strong> {scannedPartsCount}
                     </Typography>
                   </Box>
                 </Paper>
               )}
 
-              {/* Raw Data Info */}
-              <Paper sx={{ p: 1.5, flexShrink: 0 }}>
-                <Typography variant="body1" color="primary" gutterBottom>
-                  💾 Raw Data Storage
-                </Typography>
-                <Box sx={{ fontSize: "0.75rem" }}>
-                  <Typography variant="caption" display="block">
-                    <strong>Auto-Storage:</strong> Enabled
+              {/* Bin Progress Details */}
+              {currentBinTag && (
+                <Paper sx={{ p: 1.5, flexShrink: 0 }}>
+                  <Typography variant="body1" color="primary" gutterBottom>
+                    📦 Current Bin
                   </Typography>
-                  <Typography variant="caption" display="block">
-                    <strong>Session:</strong> {sessionId.substring(8, 18)}...
-                  </Typography>
-                  <Typography variant="caption" display="block">
-                    <strong>API Endpoint:</strong> /api/raw-scans
-                  </Typography>
-                </Box>
-              </Paper>
-
-              {/* Refresh Button */}
-              <Paper sx={{ p: 1, textAlign: "center" }}>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={fetchInvoices}
-                  disabled={loadingInvoices}
-                >
-                  {loadingInvoices ? "Loading..." : "Refresh Invoices"}
-                </Button>
-              </Paper>
+                  <Box sx={{ fontSize: "0.75rem" }}>
+                    <Typography variant="caption" display="block">
+                      <strong>Bin:</strong> {currentBinTag}
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                      <strong>Original Qty:</strong>{" "}
+                      {binPartDetails.originalQuantity}
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                      <strong>Remaining:</strong> {remainingBinQuantity}
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                      <strong>Progress:</strong> {scannedQuantity}/
+                      {binPartDetails.quantity} ({progress}%)
+                    </Typography>
+                  </Box>
+                </Paper>
+              )}
             </Box>
           </Grid>
         </Grid>
@@ -1979,4 +2224,4 @@ const User = () => {
   );
 };
 
-export default User;
+export default dispatch;

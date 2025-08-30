@@ -4,6 +4,7 @@ const adminSchema = new mongoose.Schema({
   email: {
     type: String,
     required: true,
+    unique: true, // to prevent duplicate emails
   },
   password: {
     type: String,
@@ -11,14 +12,19 @@ const adminSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    default: "Admin",
+    default: "admin",
   },
-
+  permissions: {
+    partMaster: { type: Boolean, default: true },
+    dispatch: { type: Boolean, default: true },
+    scanner: { type: Boolean, default: true },
+    admin: { type: Boolean, default: true },
+  },
   createdAt: {
     type: Date,
     default: Date.now,
   },
 });
 
-const adminLogin = mongoose.model("admin", adminSchema);
-module.exports = adminLogin;
+const AdminLogin = mongoose.model("Admin", adminSchema);
+module.exports = AdminLogin;

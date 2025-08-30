@@ -37,11 +37,11 @@ const PartMaster = () => {
         return;
       }
 
+      // ✅ Fixed: Send the correct field names that match the backend
       const apiData = {
         partNo: formData.partNo,
-        partName: formData.description,
-        quantity: formData.binQuantity,
-        labelSize: "4 inch",
+        description: formData.description, // ✅ Changed from 'partName'
+        binQuantity: parseInt(formData.binQuantity), // ✅ Changed from 'quantity' and ensure it's a number
       };
 
       const response = await api.post("/addPart", apiData);
@@ -59,7 +59,6 @@ const PartMaster = () => {
   return (
     <Box
       sx={{
-       
         backgroundColor: "#f5f5f5",
         display: "flex",
         alignItems: "center",

@@ -1,23 +1,27 @@
 import axios from "axios";
 
 // export const API_URL = "https://archery-new.onrender.com/api";
-export const API_URL = "http://localhost:5555"; // Added /api here
+export const API_URL = "http://localhost:5555"; // Backend base URL
+
+// Get token from localStorage (or wherever you store it)
+const token = localStorage.getItem("token");
 
 export const api = axios.create({
   baseURL: API_URL,
   headers: {
     "Content-Type": "application/json",
+    Authorization: token ? `Bearer ${token}` : "", // only add if token exists
   },
 });
 
 // Add response interceptor for debugging
 api.interceptors.response.use(
   (response) => {
-    console.log("API Success:", response.config.url, response.status);
+    console.log("✅ API Success:", response.config.url, response.status);
     return response;
   },
   (error) => {
-    console.error("API Error:", {
+    console.error("❌ API Error:", {
       status: error.response?.status,
       url: error.config?.url,
       message: error.message,

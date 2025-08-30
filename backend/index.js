@@ -5,8 +5,6 @@ const path = require("path");
 const app = express();
 
 app.use(express.json());
-const { ThermalPrinter, PrinterTypes } = require("node-thermal-printer");
-const net = require("net");
 
 // Add static file serving with proper MIME types
 app.use(
@@ -74,9 +72,11 @@ app.use("/api/scan", barcodeRoutes);
 const binDetails = require("./src/Route/BinRoute");
 app.use("/api", binDetails);
 
+const rawScansRoutes = require("./src/Route/MachineRoute");
+app.use("/api/raw-scans", rawScansRoutes);
 
-const rawScansRoutes = require('./src/Route/MachineRoute');
-app.use('/api/raw-scans', rawScansRoutes);
+const userRoutes = require("./src/Route/UserRoute");
+app.use(userRoutes);
 
 // 404 handler for debugging
 app.use("*", (req, res) => {

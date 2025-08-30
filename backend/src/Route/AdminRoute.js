@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 const Admin = require("../models/AdminModel");
 require("dotenv").config();
 
+// ✅ Register Admin
 route.post("/register", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -25,6 +26,7 @@ route.post("/register", async (req, res) => {
     const newAdmin = new Admin({
       email,
       password: hashedPassword,
+      role: "admin", // ✅ ensure lowercase role
     });
 
     await newAdmin.save();
@@ -36,6 +38,7 @@ route.post("/register", async (req, res) => {
   }
 });
 
+// ✅ Login Admin
 route.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -67,7 +70,12 @@ route.post("/login", async (req, res) => {
     res.status(200).json({
       message: "Login successful",
       token,
-      admin: { id: admin._id, email: admin.email, role: admin.role },
+      admin: {
+        id: admin._id,
+        email: admin.email,
+        role: admin.role, // ✅ always "admin"
+        permissions: admin.permissions, // ✅ include permissions
+      },
     });
   } catch (error) {
     console.error("Login Error:", error);
