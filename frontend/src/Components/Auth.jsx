@@ -15,34 +15,37 @@ const Auth = () => {
     e.preventDefault();
 
     try {
-      // Decide endpoint based on type
       const endpoint = isUserLogin ? "/userLogin" : "/login";
 
-      const response = await api.post(endpoint, {
-        email,
-        password,
-      });
+      const response = await api.post(endpoint, { email, password });
 
-      toast.success("Login Successful", { position: "top-right" });
+      // ✅ Check if backend actually confirmed success
+      if (response.data?.success) {
+        toast.success("Login Successful", { position: "top-right" });
 
-      localStorage.setItem("token", response.data.token);
+        localStorage.setItem("token", response.data.token);
 
-      if (isUserLogin) {
-        // Store user role + permissions
-        localStorage.setItem("role", response.data.user.role);
-        localStorage.setItem(
-          "permissions",
-          JSON.stringify(response.data.user.permissions)
-        );
-        localStorage.setItem("user", JSON.stringify(response.data.user)); // ✅ save user object
-        navigate("/permissions");
+        if (isUserLogin) {
+          localStorage.setItem("role", response.data.user.role);
+          localStorage.setItem(
+            "permissions",
+            JSON.stringify(response.data.user.permissions)
+          );
+          localStorage.setItem("user", JSON.stringify(response.data.user));
+          navigate("/permissions");
+        } else {
+          localStorage.setItem("role", response.data.admin.role);
+          localStorage.setItem("user", JSON.stringify(response.data.admin));
+          navigate("/dashboard");
+        }
       } else {
-        // Store admin role
-        localStorage.setItem("role", response.data.admin.role);
-        localStorage.setItem("user", JSON.stringify(response.data.admin)); // ✅ save admin object
-        navigate("/dashboard");
+        // If backend returned a failure with 200 status
+        toast.error(response.data?.message || "Login Failed", {
+          position: "top-right",
+        });
       }
     } catch (error) {
+      // Only for network/500 errors
       toast.error(error.response?.data?.message || "Login Failed", {
         position: "top-right",
       });
