@@ -37,7 +37,7 @@ app.use(
 
 app.use(
   cors({
-    origin: "https://archery-new-2.onrender.com/", // Allow requests from this origin
+    origin: "*", // Allow requests from this origin
     // origin: "http://localhost:5173",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Allowed methods
     allowedHeaders: ["Content-Type", "Authorization"], // Allowed headers
