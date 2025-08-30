@@ -8,8 +8,8 @@ import { api } from "../apiConfig";
 const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isUserLogin, setIsUserLogin] = useState(true); // Toggle between user and admin login
-  const [isLoading, setIsLoading] = useState(false); // Loading state
+  const [isUserLogin, setIsUserLogin] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -34,10 +34,10 @@ const Auth = () => {
       console.log("✔️ Success Flag:", response.data?.success);
       console.log("🌐 HTTP Status:", response.status);
 
-      // Check for success - handle both success flag and HTTP status
-      const isSuccessful = response.data?.success || response.status === 200;
+      // FIXED: Check for success properly - handle both token-based and non-token responses
+      const isSuccessful = response.data?.success === true;
 
-      if (isSuccessful && response.data?.token) {
+      if (isSuccessful) {
         console.log("🎉 Login successful, processing...");
 
         toast.success("Login Successful", {
@@ -45,18 +45,25 @@ const Auth = () => {
           autoClose: 2000,
         });
 
-        // Store token
-        localStorage.setItem("token", response.data.token);
-
         if (isUserLogin) {
           // Handle user login
           if (response.data.user) {
+            // Store token if provided (for JWT-based auth)
+            if (response.data.token) {
+              localStorage.setItem("token", response.data.token);
+            }
+
+            // Store user data
             localStorage.setItem("role", response.data.user.role);
             localStorage.setItem(
               "permissions",
               JSON.stringify(response.data.user.permissions || {})
             );
             localStorage.setItem("user", JSON.stringify(response.data.user));
+
+            // Store user ID for session tracking (alternative to JWT)
+            localStorage.setItem("userId", response.data.user._id);
+            localStorage.setItem("userEmail", response.data.user.email);
 
             console.log(
               "👤 User login successful, redirecting to /permissions"
@@ -68,17 +75,37 @@ const Auth = () => {
         } else {
           // Handle admin login
           if (response.data.admin) {
+            // Store token if provided
+            if (response.data.token) {
+              localStorage.setItem("token", response.data.token);
+            }
+
             localStorage.setItem("role", response.data.admin.role);
             localStorage.setItem("user", JSON.stringify(response.data.admin));
 
             console.log("👑 Admin login successful, redirecting to /dashboard");
+            setTimeout(() => navigate("/dashboard"), 1500);
+          } else if (
+            response.data.user &&
+            response.data.user.role === "admin"
+          ) {
+            // Fallback: treat as admin if user has admin role
+            if (response.data.token) {
+              localStorage.setItem("token", response.data.token);
+            }
+            localStorage.setItem("role", response.data.user.role);
+            localStorage.setItem("user", JSON.stringify(response.data.user));
+
+            console.log(
+              "👑 Admin login (via user) successful, redirecting to /dashboard"
+            );
             setTimeout(() => navigate("/dashboard"), 1500);
           } else {
             throw new Error("Admin data not found in response");
           }
         }
       } else {
-        // Backend returned failure or missing token
+        // Backend returned failure
         const errorMessage = response.data?.message || "Invalid credentials";
         console.log("❌ Login failed:", errorMessage);
 
@@ -95,10 +122,16 @@ const Auth = () => {
 
       if (error.response) {
         // Server responded with error status
-        errorMessage =
-          error.response.data?.message ||
-          `Server error (${error.response.status})`;
         console.log("📡 Server error response:", error.response.data);
+
+        // FIXED: Better error handling for different response structures
+        if (error.response.data?.success === false) {
+          errorMessage = error.response.data.message || "Invalid credentials";
+        } else if (error.response.data?.message) {
+          errorMessage = error.response.data.message;
+        } else {
+          errorMessage = `Server error (${error.response.status})`;
+        }
       } else if (error.request) {
         // Request was made but no response
         errorMessage = "No response from server. Please check your connection.";
@@ -197,7 +230,7 @@ const Auth = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full mt-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              autocomplete="email"
+              autoComplete="email"
               required
               disabled={isLoading}
               placeholder="Enter your email"
@@ -217,7 +250,7 @@ const Auth = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full mt-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              autocomplete="current-password"
+              autoComplete="current-password"
               required
               disabled={isLoading}
               placeholder="Enter your password"
