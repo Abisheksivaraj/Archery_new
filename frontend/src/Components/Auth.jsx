@@ -18,7 +18,10 @@ const Auth = () => {
     setIsLoading(true);
 
     try {
-      const endpoint = isUserLogin ? "/api/user/userLogin" : "/login";
+      const endpoint = isUserLogin ? "/api/user/userLogin" : "/api/admin/login";
+
+      // const response = await api.post(endpoint, { email, password });
+
 
       // Clear any existing toasts first
       toast.dismiss();

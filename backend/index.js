@@ -54,7 +54,7 @@ app.get("/", (req, res) => {
 
 // Import and use routes
 const adminRoute = require("./src/Route/AdminRoute");
-app.use(adminRoute);
+app.use("/api/admin", adminRoute);
 
 const partRoutes = require("./src/Route/PartRoute");
 app.use(partRoutes);
