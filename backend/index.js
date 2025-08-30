@@ -6,7 +6,9 @@ const app = express();
 
 app.use(express.json());
 
+// ----------------------
 // CORS setup
+// ----------------------
 app.use(
   cors({
     origin: "*",
@@ -47,14 +49,13 @@ app.use(userRoutes);
 // ----------------------
 // SERVE REACT FRONTEND (PRODUCTION)
 // ----------------------
-// after you run "npm run build" in frontend, copy the build/dist into backend folder
-app.use(express.static(path.join(__dirname, "client", "dist"))); // for Vite
-// OR
-// app.use(express.static(path.join(__dirname, "client", "build"))); // for CRA
+// Make sure "npm run build" is run inside frontend/
+// The build will output to frontend/dist
+app.use(express.static(path.join(__dirname, "frontend", "dist"))); // ✅ for Vite
 
 // Catch-all: return React index.html for any unknown route
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "client", "dist", "index.html")); // adjust build/dist accordingly
+  res.sendFile(path.join(__dirname, "frontend", "dist", "index.html"));
 });
 
 // ----------------------
