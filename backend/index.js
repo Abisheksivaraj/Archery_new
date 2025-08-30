@@ -6,22 +6,53 @@ const app = express();
 
 app.use(express.json());
 
-// ----------------------
-// CORS setup
-// ----------------------
+// Add static file serving with proper MIME types
 app.use(
-  cors({
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
+  "/src",
+  express.static(path.join(__dirname, "src"), {
+    setHeaders: (res, path) => {
+      if (path.endsWith(".css")) {
+        res.setHeader("Content-Type", "text/css");
+      }
+      if (path.endsWith(".js")) {
+        res.setHeader("Content-Type", "text/javascript");
+      }
+    },
   })
 );
+
+// Alternative: serve all static files from root with proper MIME types
+app.use(
+  express.static(__dirname, {
+    setHeaders: (res, path) => {
+      if (path.endsWith(".css")) {
+        res.setHeader("Content-Type", "text/css");
+      }
+      if (path.endsWith(".js")) {
+        res.setHeader("Content-Type", "text/javascript");
+      }
+    },
+  })
+);
+
+app.use(
+  cors({
+    origin: "*", // Allow requests from this origin
+    // origin: "http://localhost:5173",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Allowed methods
+    allowedHeaders: ["Content-Type", "Authorization"], // Allowed headers
+    credentials: true, // Allow credentials (if required)
+  })
+);
+
 app.options("*", cors());
 
-// ----------------------
-// API ROUTES
-// ----------------------
+// Welcome route
+app.get("/", (req, res) => {
+  return res.status(200).send({ message: "Welcome" });
+});
+
+// Import and use routes
 const adminRoute = require("./src/Route/AdminRoute");
 app.use(adminRoute);
 
@@ -34,6 +65,7 @@ app.use(productionRoutes);
 const invoiceRoutes = require("./src/Route/InvoiceRoute");
 app.use(invoiceRoutes);
 
+// ADD THIS LINE - Barcode scan routes
 const barcodeRoutes = require("./src/Route/InvoiceRoute");
 app.use("/api/scan", barcodeRoutes);
 
@@ -46,17 +78,14 @@ app.use("/api/raw-scans", rawScansRoutes);
 const userRoutes = require("./src/Route/UserRoute");
 app.use(userRoutes);
 
-// ----------------------
-// SERVE REACT FRONTEND (PRODUCTION)
-// ----------------------
-// Make sure "npm run build" is run inside frontend/
-// The build will output to frontend/dist
-app.use(express.static(path.join(__dirname, "frontend", "dist"))); // ✅ for Vite
-
-// Catch-all: return React index.html for any unknown route
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "frontend", "dist", "index.html"));
+// 404 handler for debugging
+app.use("*", (req, res) => {
+  console.log("404 - Route not found:", req.originalUrl);
+  res.status(404).json({
+    success: false,
+    message: "Route not found",
+    requestedRoute: req.originalUrl,
+  });
 });
 
-// ----------------------
 module.exports = app;
