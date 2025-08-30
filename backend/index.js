@@ -6,53 +6,20 @@ const app = express();
 
 app.use(express.json());
 
-// Add static file serving with proper MIME types
-app.use(
-  "/src",
-  express.static(path.join(__dirname, "src"), {
-    setHeaders: (res, path) => {
-      if (path.endsWith(".css")) {
-        res.setHeader("Content-Type", "text/css");
-      }
-      if (path.endsWith(".js")) {
-        res.setHeader("Content-Type", "text/javascript");
-      }
-    },
-  })
-);
-
-// Alternative: serve all static files from root with proper MIME types
-app.use(
-  express.static(__dirname, {
-    setHeaders: (res, path) => {
-      if (path.endsWith(".css")) {
-        res.setHeader("Content-Type", "text/css");
-      }
-      if (path.endsWith(".js")) {
-        res.setHeader("Content-Type", "text/javascript");
-      }
-    },
-  })
-);
-
+// CORS setup
 app.use(
   cors({
-    origin: "*", // Allow requests from this origin
-    // origin: "http://localhost:5173",
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Allowed methods
-    allowedHeaders: ["Content-Type", "Authorization"], // Allowed headers
-    credentials: true, // Allow credentials (if required)
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   })
 );
-
 app.options("*", cors());
 
-// Welcome route
-app.get("/", (req, res) => {
-  return res.status(200).send({ message: "Welcome" });
-});
-
-// Import and use routes
+// ----------------------
+// API ROUTES
+// ----------------------
 const adminRoute = require("./src/Route/AdminRoute");
 app.use(adminRoute);
 
@@ -65,7 +32,6 @@ app.use(productionRoutes);
 const invoiceRoutes = require("./src/Route/InvoiceRoute");
 app.use(invoiceRoutes);
 
-// ADD THIS LINE - Barcode scan routes
 const barcodeRoutes = require("./src/Route/InvoiceRoute");
 app.use("/api/scan", barcodeRoutes);
 
@@ -78,14 +44,18 @@ app.use("/api/raw-scans", rawScansRoutes);
 const userRoutes = require("./src/Route/UserRoute");
 app.use(userRoutes);
 
-// 404 handler for debugging
-app.use("*", (req, res) => {
-  console.log("404 - Route not found:", req.originalUrl);
-  res.status(404).json({
-    success: false,
-    message: "Route not found",
-    requestedRoute: req.originalUrl,
-  });
+// ----------------------
+// SERVE REACT FRONTEND (PRODUCTION)
+// ----------------------
+// after you run "npm run build" in frontend, copy the build/dist into backend folder
+app.use(express.static(path.join(__dirname, "client", "dist"))); // for Vite
+// OR
+// app.use(express.static(path.join(__dirname, "client", "build"))); // for CRA
+
+// Catch-all: return React index.html for any unknown route
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "client", "dist", "index.html")); // adjust build/dist accordingly
 });
 
+// ----------------------
 module.exports = app;
