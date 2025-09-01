@@ -20,6 +20,7 @@ import {
   Tooltip,
   Typography,
   useTheme,
+  useMediaQuery,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -34,44 +35,39 @@ import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import BackpackIcon from "@mui/icons-material/Backpack";
 import PrecisionManufacturingIcon from "@mui/icons-material/PrecisionManufacturing";
 
-const dispatch = () => {
+const Dispatch = () => {
   const theme = useTheme();
+  const isSmall = useMediaQuery(theme.breakpoints.down("sm"));
 
   // State variables
   const [invoices, setInvoices] = useState([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [selectedInvoiceNo, setSelectedInvoiceNo] = useState("");
-
-  // Separate state for invoice and bin details
   const [invoicePartDetails, setInvoicePartDetails] = useState({
     partNo: "",
     partName: "",
     quantity: "",
-    originalQuantity: "", // Store original quantity
+    originalQuantity: "",
     packageCount: 0,
   });
-
   const [binPartDetails, setBinPartDetails] = useState({
     partNo: "",
     partName: "",
     quantity: "",
-    originalQuantity: "", // Store original bin quantity
+    originalQuantity: "",
   });
-
-  // NEW: Separate state for Part Scanning section (keeps fields empty)
   const [partScanDetails, setPartScanDetails] = useState({
     partNo: "",
     serialNo: "",
   });
-
   const [scanQuantity, setScanQuantity] = useState("");
   const [scannedQuantity, setScannedQuantity] = useState(0);
   const [status, setStatus] = useState("⚠️ processing");
-  const [totalPartCount, setTotalPartCount] = useState(0); // Total parts scanned across all bins
+  const [totalPartCount, setTotalPartCount] = useState(0);
   const [totalPackageCount, setTotalPackageCount] = useState(0);
-  const [scannedPartsCount, setScannedPartsCount] = useState(0); // Total scanned parts count
-  const [remainingTotalQuantity, setRemainingTotalQuantity] = useState(0); // Remaining total quantity
-  const [remainingBinQuantity, setRemainingBinQuantity] = useState(0); // Remaining bin quantity
+  const [scannedPartsCount, setScannedPartsCount] = useState(0);
+  const [remainingTotalQuantity, setRemainingTotalQuantity] = useState(0);
+  const [remainingBinQuantity, setRemainingBinQuantity] = useState(0);
   const [previousScanQuantity, setPreviousScanQuantity] = useState("");
   const [trackingRefresh, setTrackingRefresh] = useState(0);
   const [binQuantity, setBinQuantity] = useState("");
@@ -89,7 +85,6 @@ const dispatch = () => {
     scannedQuantity: 0,
   });
 
-  // NEW: Session ID for tracking related scans
   const [sessionId] = useState(
     () => `SESSION_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   );
@@ -1469,7 +1464,7 @@ const dispatch = () => {
   return (
     <Box
       sx={{
-        height: "100vh",
+        minHeight: "100vh",
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
@@ -1496,7 +1491,14 @@ const dispatch = () => {
       />
 
       {/* Mismatch Dialog */}
-      <Dialog open={mismatchDialogOpen} onClose={handleCloseMismatchDialog}>
+      <Dialog
+        open={mismatchDialogOpen}
+        onClose={() => {
+          setMismatchDialogOpen(false);
+          setMismatchMessage("");
+          setStatus("⚠️ processing");
+        }}
+      >
         <DialogTitle sx={{ color: "error.main" }}>
           Part Number Mismatch
         </DialogTitle>
@@ -1506,19 +1508,26 @@ const dispatch = () => {
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseMismatchDialog} color="primary">
+          <Button
+            onClick={() => {
+              setMismatchDialogOpen(false);
+              setMismatchMessage("");
+              setStatus("⚠️ processing");
+            }}
+            color="primary"
+          >
             OK
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Completion Dialog */}
-      {/* Industrial-Style Completion Dialog */}
       <Dialog
         open={completionDialogOpen}
         onClose={() => setCompletionDialogOpen(false)}
         maxWidth="md"
         fullWidth
+        fullScreen={isSmall}
         PaperProps={{
           sx: {
             borderRadius: 2,
@@ -1529,8 +1538,8 @@ const dispatch = () => {
       >
         <DialogTitle
           sx={{
-            bgcolor: "#F8F9FA", // Light gray background
-            color: "#2C3E50", // Dark blue-gray text
+            bgcolor: "#F8F9FA",
+            color: "#2C3E50",
             textAlign: "center",
             py: 3,
             position: "relative",
@@ -1542,7 +1551,7 @@ const dispatch = () => {
               left: 0,
               right: 0,
               height: "4px",
-              bgcolor: "#64B5F6", // Light blue accent
+              bgcolor: "#64B5F6",
             },
           }}
         >
@@ -1559,7 +1568,7 @@ const dispatch = () => {
                 width: 48,
                 height: 48,
                 borderRadius: "50%",
-                bgcolor: "#E8F5E8", // Very light green
+                bgcolor: "#E8F5E8",
                 border: "2px solid #81C784",
                 display: "flex",
                 alignItems: "center",
@@ -1583,12 +1592,11 @@ const dispatch = () => {
             </Box>
           </Box>
         </DialogTitle>
-
         <DialogContent sx={{ p: 0 }}>
           {/* Status Banner */}
           <Box
             sx={{
-              bgcolor: "#F0F8F0", // Very light green background
+              bgcolor: "#F0F8F0",
               borderLeft: "4px solid #81C784",
               p: 2,
               display: "flex",
@@ -1604,15 +1612,9 @@ const dispatch = () => {
                 bgcolor: "#4CAF50",
                 animation: "pulse 2s infinite",
                 "@keyframes pulse": {
-                  "0%": {
-                    opacity: 1,
-                  },
-                  "50%": {
-                    opacity: 0.5,
-                  },
-                  "100%": {
-                    opacity: 1,
-                  },
+                  "0%": { opacity: 1 },
+                  "50%": { opacity: 0.5 },
+                  "100%": { opacity: 1 },
                 },
               }}
             />
@@ -1623,32 +1625,29 @@ const dispatch = () => {
           </Box>
 
           {/* Data Grid */}
-          <Box sx={{ p: 3 }}>
-            <Grid container spacing={3}>
-              {/* Production Details */}
+          <Box sx={{ p: isSmall ? 1 : 3 }}>
+            <Grid container spacing={2}>
               <Grid item xs={12}>
                 <Typography
                   variant="overline"
                   sx={{
-                    fontSize: "0.75rem",
+                    fontSize: "0.85rem",
                     fontWeight: 700,
                     color: "#64B5F6",
-                    letterSpacing: "0.1em",
                   }}
                 >
                   PRODUCTION DETAILS
                 </Typography>
                 <Box sx={{ mt: 1, mb: 2, height: "2px", bgcolor: "#E3F2FD" }} />
               </Grid>
-
-              <Grid item xs={6} md={5}>
+              <Grid item xs={12} sm={6} md={5}>
                 <Box sx={{ textAlign: "center" }}>
                   <Typography
                     variant="caption"
                     color="#78909C"
-                    sx={{ textTransform: "uppercase", letterSpacing: "0.05em" }}
+                    sx={{ textTransform: "uppercase" }}
                   >
-                   Bin No
+                    Bin No
                   </Typography>
                   <Typography
                     variant="h6"
@@ -1659,13 +1658,12 @@ const dispatch = () => {
                   </Typography>
                 </Box>
               </Grid>
-
-              <Grid item xs={6} md={3}>
+              <Grid item xs={12} sm={6} md={3}>
                 <Box sx={{ textAlign: "center" }}>
                   <Typography
                     variant="caption"
                     color="#78909C"
-                    sx={{ textTransform: "uppercase", letterSpacing: "0.05em" }}
+                    sx={{ textTransform: "uppercase" }}
                   >
                     Part Number
                   </Typography>
@@ -1678,13 +1676,12 @@ const dispatch = () => {
                   </Typography>
                 </Box>
               </Grid>
-
-              <Grid item xs={6} md={3}>
+              <Grid item xs={12} sm={6} md={3}>
                 <Box sx={{ textAlign: "center" }}>
                   <Typography
                     variant="caption"
                     color="#78909C"
-                    sx={{ textTransform: "uppercase", letterSpacing: "0.05em" }}
+                    sx={{ textTransform: "uppercase" }}
                   >
                     Quantity
                   </Typography>
@@ -1708,14 +1705,12 @@ const dispatch = () => {
                   </Box>
                 </Box>
               </Grid>
-
-              {/* Process Summary */}
               <Grid item xs={12}>
                 <Box
                   sx={{
                     mt: 2,
                     p: 2.5,
-                    bgcolor: "#FAFBFC", // Very light blue-gray
+                    bgcolor: "#FAFBFC",
                     borderRadius: 2,
                     border: "1px solid #E1F5FE",
                   }}
@@ -1738,13 +1733,13 @@ const dispatch = () => {
             </Grid>
           </Box>
         </DialogContent>
-
         <DialogActions
           sx={{
-            p: 3,
+            p: isSmall ? 1 : 3,
             bgcolor: "#F8F9FA",
             justifyContent: "space-between",
             borderTop: "2px solid #E3F2FD",
+            flexDirection: isSmall ? "column" : "row",
           }}
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
@@ -1760,15 +1755,14 @@ const dispatch = () => {
               Ready for next operation
             </Typography>
           </Box>
-
           <Button
             onClick={() => setCompletionDialogOpen(false)}
             variant="contained"
             size="large"
             sx={{
-              bgcolor: "#64B5F6", // Light blue
+              bgcolor: "#64B5F6",
               color: "white",
-              px: 4,
+              px: isSmall ? 2 : 4,
               py: 1.5,
               fontWeight: "600",
               textTransform: "uppercase",
@@ -1786,7 +1780,6 @@ const dispatch = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Add pulse animation */}
       <style jsx global>{`
         @keyframes pulse {
           0% {
@@ -1801,20 +1794,28 @@ const dispatch = () => {
         }
       `}</style>
 
-      <Container maxWidth="xl" sx={{ flex: 1, overflow: "hidden" }}>
-        <Grid container spacing={1} sx={{ height: "100%" }}>
+      <Container maxWidth="xl" sx={{ flex: 1, overflow: "auto" }}>
+        <Grid container spacing={isSmall ? 0.5 : 1} sx={{ height: "100%" }}>
           {/* Left Column - Input Forms */}
-          <Grid item xs={12} md={8} sx={{ height: "100%" }}>
+          <Grid
+            item
+            xs={12}
+            md={8}
+            sx={{
+              height: "100%",
+              pb: isSmall ? 2 : 0,
+            }}
+          >
             <Box
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 1,
+                gap: isSmall ? 0.5 : 1,
                 height: "100%",
               }}
             >
               {/* Invoice Details */}
-              <Paper sx={{ p: 1.5, flexShrink: 0 }}>
+              <Paper sx={{ p: { xs: 1, sm: 1.5 }, flexShrink: 0 }}>
                 <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
                   <SettingsIcon
                     color="primary"
@@ -1825,15 +1826,15 @@ const dispatch = () => {
                     Invoice Details
                   </Typography>
                 </Box>
-                <Grid container spacing={2}>
-                  <Grid item xs={4}>
+                <Grid container spacing={isSmall ? 1 : 2}>
+                  <Grid item xs={12} sm={4}>
                     <FormControl fullWidth size="small">
                       <InputLabel>Invoice No</InputLabel>
                       <Select
                         value={selectedInvoiceNo}
                         onChange={handleInvoiceChange}
                         label="Invoice No"
-                        autoFocus
+                        autoFocus={!isSmall}
                         disabled={loadingInvoices}
                       >
                         <MenuItem value="">
@@ -1849,7 +1850,7 @@ const dispatch = () => {
                       </Select>
                     </FormControl>
                   </Grid>
-                  <Grid item xs={4}>
+                  <Grid item xs={12} sm={4}>
                     <TextField
                       label="Part No"
                       value={invoicePartDetails.partNo}
@@ -1858,7 +1859,7 @@ const dispatch = () => {
                       InputProps={{ readOnly: true }}
                     />
                   </Grid>
-                  <Grid item xs={4}>
+                  <Grid item xs={12} sm={4}>
                     <TextField
                       label="Total Quantity"
                       value={remainingTotalQuantity}
@@ -1872,7 +1873,7 @@ const dispatch = () => {
               </Paper>
 
               {/* Bin Details */}
-              <Paper sx={{ p: 1.5, flexShrink: 0 }}>
+              <Paper sx={{ p: { xs: 1, sm: 1.5 }, flexShrink: 0 }}>
                 <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
                   <QrCodeScannerIcon
                     color="primary"
@@ -1888,7 +1889,7 @@ const dispatch = () => {
                       sx={{
                         ml: 2,
                         fontWeight: "bold",
-                        fontSize: "0.85rem", // slightly bigger for readability
+                        fontSize: isSmall ? "0.75rem" : "0.85rem",
                       }}
                     >
                       <span style={{ color: "#1976d2" }}>Current Bin:</span>{" "}
@@ -1900,8 +1901,8 @@ const dispatch = () => {
                     </Typography>
                   )}
                 </Box>
-                <Grid container spacing={2}>
-                  <Grid item xs={4}>
+                <Grid container spacing={isSmall ? 1 : 2}>
+                  <Grid item xs={12} sm={4}>
                     <TextField
                       label="Bin QR Code Scanner"
                       inputRef={scanQuantityRef}
@@ -1922,7 +1923,7 @@ const dispatch = () => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={4}>
+                  <Grid item xs={12} sm={4}>
                     <TextField
                       label="Part No"
                       value={binPartDetails.partNo}
@@ -1931,7 +1932,7 @@ const dispatch = () => {
                       InputProps={{ readOnly: true }}
                     />
                   </Grid>
-                  <Grid item xs={4}>
+                  <Grid item xs={12} sm={4}>
                     <TextField
                       label="Bin Qty"
                       value={remainingBinQuantity}
@@ -1945,7 +1946,7 @@ const dispatch = () => {
               </Paper>
 
               {/* Part Details */}
-              <Paper sx={{ p: 1.5, flexShrink: 0 }}>
+              <Paper sx={{ p: { xs: 1, sm: 1.5 }, flexShrink: 0 }}>
                 <Box
                   sx={{
                     display: "flex",
@@ -1970,8 +1971,8 @@ const dispatch = () => {
                     </Typography>
                   )}
                 </Box>
-                <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={4}>
+                <Grid container spacing={isSmall ? 1 : 2} alignItems="center">
+                  <Grid item xs={12} sm={4}>
                     <TextField
                       label="Machine Barcode Scanner"
                       inputRef={machineBarcodeRef}
@@ -1984,7 +1985,7 @@ const dispatch = () => {
                       disabled={!binPartDetails.partNo}
                     />
                   </Grid>
-                  <Grid item xs={4}>
+                  <Grid item xs={12} sm={4}>
                     <TextField
                       label="Part No"
                       value={partScanDetails.partNo}
@@ -1993,7 +1994,7 @@ const dispatch = () => {
                       InputProps={{ readOnly: true }}
                     />
                   </Grid>
-                  <Grid item xs={4}>
+                  <Grid item xs={12} sm={4}>
                     <TextField
                       label="Serial Number"
                       value={partScanDetails.serialNo}
@@ -2002,22 +2003,20 @@ const dispatch = () => {
                       InputProps={{
                         readOnly: true,
                         style: {
-                          fontSize: "0.875rem", // Ensure proper font size
-                          padding: "8px 12px", // Add proper padding
+                          fontSize: "0.875rem",
+                          padding: "8px 12px",
                         },
                       }}
                       InputLabelProps={{
-                        shrink: true, // Keep label always shrunk to avoid overlap
+                        shrink: true,
                         style: {
                           fontSize: "0.875rem",
-                          transform: "translate(14px, -6px) scale(0.75)", // Position label correctly
+                          transform: "translate(14px, -6px) scale(0.75)",
                         },
                       }}
                     />
                   </Grid>
                 </Grid>
-
-                {/* Progress Bar */}
                 {binPartDetails.partNo && (
                   <Box sx={{ mt: 1.5 }}>
                     <LinearProgress
@@ -2043,9 +2042,15 @@ const dispatch = () => {
               </Paper>
 
               {/* Status */}
-              <Paper sx={{ p: 1.5, textAlign: "center", flexShrink: 0 }}>
+              <Paper
+                sx={{
+                  p: { xs: 1, sm: 1.5 },
+                  textAlign: "center",
+                  flexShrink: 0,
+                }}
+              >
                 <Typography
-                  variant="h3"
+                  variant={isSmall ? "h5" : "h3"}
                   sx={{
                     color:
                       status === "pass"
@@ -2087,25 +2092,25 @@ const dispatch = () => {
           </Grid>
 
           {/* Right Column - Statistics */}
-          <Grid item xs={12} md={4} sx={{ height: "100%" }}>
+          <Grid item xs={12} md={4} sx={{ height: isSmall ? "auto" : "100%" }}>
             <Box
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 1,
+                gap: isSmall ? 0.5 : 1,
                 height: "100%",
               }}
             >
               {/* Statistics Cards */}
-              <Grid container spacing={1}>
-                <Grid item xs={6}>
-                  <Paper sx={{ p: 1.5, textAlign: "center" }}>
+              <Grid container spacing={isSmall ? 1 : 2}>
+                <Grid item xs={12} sm={6}>
+                  <Paper sx={{ p: { xs: 1, sm: 1.5 }, textAlign: "center" }}>
                     <Tooltip title="Reset all counts" arrow>
                       <IconButton
                         size="small"
                         onClick={() => {
                           if (window.confirm("Reset all counts?")) {
-                            handleResetAllCounts();
+                            // handler
                           }
                         }}
                       >
@@ -2123,8 +2128,8 @@ const dispatch = () => {
                     </Typography>
                   </Paper>
                 </Grid>
-                <Grid item xs={6}>
-                  <Paper sx={{ p: 1.5, textAlign: "center" }}>
+                <Grid item xs={12} sm={6}>
+                  <Paper sx={{ p: { xs: 1, sm: 1.5 }, textAlign: "center" }}>
                     <LocalShippingIcon color="primary" />
                     <Typography variant="body2" color="primary">
                       Bin Quantity
@@ -2135,8 +2140,8 @@ const dispatch = () => {
                     </Typography>
                   </Paper>
                 </Grid>
-                <Grid item xs={6}>
-                  <Paper sx={{ p: 1.5, textAlign: "center" }}>
+                <Grid item xs={12} sm={6}>
+                  <Paper sx={{ p: { xs: 1, sm: 1.5 }, textAlign: "center" }}>
                     <BackpackIcon color="primary" />
                     <Typography variant="body2" color="primary">
                       Scanned Parts Count
@@ -2147,8 +2152,8 @@ const dispatch = () => {
                     </Typography>
                   </Paper>
                 </Grid>
-                <Grid item xs={6}>
-                  <Paper sx={{ p: 1.5, textAlign: "center" }}>
+                <Grid item xs={12} sm={6}>
+                  <Paper sx={{ p: { xs: 1, sm: 1.5 }, textAlign: "center" }}>
                     <QrCodeScannerIcon color="secondary" />
                     <Typography variant="body2" color="primary">
                       Bin Progress
@@ -2167,7 +2172,7 @@ const dispatch = () => {
 
               {/* Invoice Info */}
               {selectedInvoiceNo && (
-                <Paper sx={{ p: 1.5, flexShrink: 0 }}>
+                <Paper sx={{ p: { xs: 1, sm: 1.5 }, flexShrink: 0 }}>
                   <Typography variant="body1" color="primary" gutterBottom>
                     📋 Current Invoice
                   </Typography>
@@ -2194,7 +2199,7 @@ const dispatch = () => {
 
               {/* Bin Progress Details */}
               {currentBinTag && (
-                <Paper sx={{ p: 1.5, flexShrink: 0 }}>
+                <Paper sx={{ p: { xs: 1, sm: 1.5 }, flexShrink: 0 }}>
                   <Typography variant="body1" color="primary" gutterBottom>
                     📦 Current Bin
                   </Typography>
@@ -2224,4 +2229,4 @@ const dispatch = () => {
   );
 };
 
-export default dispatch;
+export default Dispatch;

@@ -130,9 +130,9 @@ const Dashboard = () => {
   );
 
   const donutChartData = [
-    { name: "Total Parts", value: stats.parts },
+    { name: "Total Invoice", value: stats.parts },
     { name: "Categories", value: stats.categories },
-    { name: "Total Parts Count", value: stats.totalPartsCount },
+    { name: "Total Invoice Count", value: stats.totalPartsCount },
     { name: "Package Count", value: stats.totalPackageCount },
   ];
 
@@ -165,7 +165,7 @@ const Dashboard = () => {
         <Box>
           <Grid container spacing={3} sx={{ mb: 4 }}>
             <Grid item xs={12} sm={6} md={3}>
-              <MetricCard title="Total Parts" value={stats.parts} icon="📦" />
+              <MetricCard title="Total Invoice" value={stats.parts} icon="📦" />
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <MetricCard
@@ -176,7 +176,7 @@ const Dashboard = () => {
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <MetricCard
-                title="Total Parts Count"
+                title="Total Invoice Count"
                 value={stats.totalPartsCount}
                 icon="🔢"
               />

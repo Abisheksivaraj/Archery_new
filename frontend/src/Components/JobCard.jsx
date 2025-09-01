@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../apiConfig";
 
+// Mock API for demonstration
+
+
 const JobCard = () => {
   const [jobNo, setJobNo] = useState("");
   const [scannedData, setScannedData] = useState(null);
@@ -74,7 +77,7 @@ const JobCard = () => {
     };
   };
 
-  // API function to submit barcode data - SIMPLIFIED WITH DEBUGGING
+  // API function to submit barcode data
   const submitBarcodeToApi = async (barcodeData) => {
     console.log("🚀 Sending to API:", { barcodeData });
 
@@ -115,6 +118,13 @@ const JobCard = () => {
         setSuccess(
           `Data saved successfully! Invoice: ${result.data.invoiceNumber}`
         );
+
+        // Auto-clear input field after successful submission
+        setTimeout(() => {
+          setJobNo("");
+          setScannedData(null);
+          setSuccess(null);
+        }, 2000); // Clear after 2 seconds to show success message
       } else {
         setError(result.message || "Failed to save data");
       }
@@ -131,7 +141,7 @@ const JobCard = () => {
     }
   };
 
-  const handleManualInput = (event) => {
+  const handleManualInput = async (event) => {
     const value = event.target.value;
     setJobNo(value);
     setError(null);
@@ -140,6 +150,11 @@ const JobCard = () => {
     if (value.length > 0) {
       const parsedData = parseBarcodeData(value);
       setScannedData(parsedData);
+
+      // Auto-submit when input length seems valid
+      if (value.length > 10) {
+        await handleApiSubmission(value);
+      }
     } else {
       setScannedData(null);
     }
@@ -161,7 +176,7 @@ const JobCard = () => {
     setSuccess(null);
   };
 
-  // Get recent scans - SIMPLIFIED
+  // Get recent scans
   const fetchRecentScans = async () => {
     try {
       const response = await api.get(`/api/scan/recent?limit=5`);
@@ -169,7 +184,7 @@ const JobCard = () => {
 
       if (data.success) {
         console.log("Recent scans:", data.data);
-        // You can set this to state and display it if needed
+        alert("Recent scans fetched! Check console for details.");
       }
     } catch (err) {
       console.error("Failed to fetch recent scans:", err);
@@ -177,11 +192,26 @@ const JobCard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 h-screen">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[calc(100vh-8rem)]">
+    <div className="min-h-screen bg-gray-50">
+      {/* Mobile-first header */}
+      <div className="bg-white shadow-sm border-b lg:hidden">
+        <div className="px-4 py-3">
+          <h1 className="text-xl font-bold text-gray-800">
+            📱 Barcode Scanner
+          </h1>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto p-4 lg:py-8">
+        {/* Desktop title - hidden on mobile */}
+        <h1 className="hidden lg:block text-2xl font-bold text-gray-800 mb-6">
+          📱 Barcode Scanner System
+        </h1>
+
+        {/* Responsive grid - stacks on mobile, side-by-side on desktop */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-8">
           {/* Left side - Scanner input */}
-          <div className="bg-white rounded-lg shadow-md p-6 h-fit max-h-[calc(100vh-12rem)] overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-md p-4 lg:p-6 order-1">
             <div className="mb-4">
               <label className="flex items-center text-sm font-medium text-gray-700 mb-2">
                 📱 Barcode Input
@@ -191,21 +221,24 @@ const JobCard = () => {
                 value={jobNo}
                 onChange={handleManualInput}
                 placeholder="Scan barcode or enter manually"
-                className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-md focus:outline-none focus:border-blue-500 transition-colors"
+                className="w-full px-3 py-2 lg:px-4 lg:py-3 text-base lg:text-lg border-2 border-gray-300 rounded-md focus:outline-none focus:border-blue-500 transition-colors"
                 disabled={loading}
               />
-              <p className="text-sm text-gray-500 mt-2">
+              <p className="text-xs lg:text-sm text-gray-500 mt-2">
                 Scan a barcode or type manually. Data will be parsed and saved
                 automatically.
               </p>
             </div>
 
-            {/* Loading indicator */}
+            {/* Status Messages */}
             {loading && (
-              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+              <div className="mb-4 p-3 lg:p-4 bg-blue-50 border border-blue-200 rounded-md">
                 <div className="flex items-center text-blue-800">
                   <div className="flex-shrink-0">
-                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <svg
+                      className="animate-spin h-4 w-4 lg:h-5 lg:w-5"
+                      viewBox="0 0 24 24"
+                    >
                       <circle
                         className="opacity-25"
                         cx="12"
@@ -222,8 +255,8 @@ const JobCard = () => {
                       />
                     </svg>
                   </div>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium">
+                  <div className="ml-2 lg:ml-3">
+                    <p className="text-xs lg:text-sm font-medium">
                       Saving data to server...
                     </p>
                   </div>
@@ -231,13 +264,12 @@ const JobCard = () => {
               </div>
             )}
 
-            {/* Success message */}
             {success && (
-              <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-md">
-                <div className="flex items-center text-green-800">
-                  <div className="flex-shrink-0">
+              <div className="mb-4 p-3 lg:p-4 bg-green-50 border border-green-200 rounded-md">
+                <div className="flex items-start text-green-800">
+                  <div className="flex-shrink-0 mt-0.5">
                     <svg
-                      className="h-5 w-5"
+                      className="h-4 w-4 lg:h-5 lg:w-5"
                       viewBox="0 0 20 20"
                       fill="currentColor"
                     >
@@ -248,20 +280,21 @@ const JobCard = () => {
                       />
                     </svg>
                   </div>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium">{success}</p>
+                  <div className="ml-2 lg:ml-3">
+                    <p className="text-xs lg:text-sm font-medium break-words">
+                      {success}
+                    </p>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Error message */}
             {error && (
-              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
-                <div className="flex items-center text-red-800">
-                  <div className="flex-shrink-0">
+              <div className="mb-4 p-3 lg:p-4 bg-red-50 border border-red-200 rounded-md">
+                <div className="flex items-start text-red-800">
+                  <div className="flex-shrink-0 mt-0.5">
                     <svg
-                      className="h-5 w-5"
+                      className="h-4 w-4 lg:h-5 lg:w-5"
                       viewBox="0 0 20 20"
                       fill="currentColor"
                     >
@@ -272,21 +305,24 @@ const JobCard = () => {
                       />
                     </svg>
                   </div>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium">{error}</p>
+                  <div className="ml-2 lg:ml-3">
+                    <p className="text-xs lg:text-sm font-medium break-words">
+                      {error}
+                    </p>
                   </div>
                 </div>
               </div>
             )}
 
+            {/* Action buttons - responsive layout */}
             {scannedData && (
-              <div className="mt-4 space-y-4">
+              <div className="mt-4 space-y-3">
                 {!success && !error && (
-                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                    <div className="flex items-center text-yellow-800">
-                      <div className="flex-shrink-0">
+                  <div className="p-3 lg:p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <div className="flex items-start text-yellow-800">
+                      <div className="flex-shrink-0 mt-0.5">
                         <svg
-                          className="h-5 w-5"
+                          className="h-4 w-4 lg:h-5 lg:w-5"
                           viewBox="0 0 20 20"
                           fill="currentColor"
                         >
@@ -297,8 +333,8 @@ const JobCard = () => {
                           />
                         </svg>
                       </div>
-                      <div className="ml-3">
-                        <p className="text-sm font-medium">
+                      <div className="ml-2 lg:ml-3">
+                        <p className="text-xs lg:text-sm font-medium">
                           Data parsed! Found {scannedData.totalParts} fields.
                           {!loading &&
                             " Click 'Process Data' to save manually."}
@@ -308,17 +344,18 @@ const JobCard = () => {
                   </div>
                 )}
 
-                <div className="flex gap-2">
+                {/* Button group - responsive stacking */}
+                <div className="flex flex-col sm:flex-row gap-2 lg:gap-3">
                   <button
                     onClick={clearData}
-                    className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200"
+                    className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-medium lg:font-bold py-2 lg:py-3 px-3 lg:px-4 rounded-md transition-colors duration-200 text-sm lg:text-base"
                     disabled={loading}
                   >
                     Clear Data
                   </button>
                   <button
                     onClick={fetchRecentScans}
-                    className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200"
+                    className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white font-medium lg:font-bold py-2 lg:py-3 px-3 lg:px-4 rounded-md transition-colors duration-200 text-sm lg:text-base"
                     disabled={loading}
                   >
                     View Recent
@@ -328,21 +365,21 @@ const JobCard = () => {
             )}
           </div>
 
-          {/* Right side - Scanned data display - SAME AS BEFORE */}
-          <div className="bg-white rounded-lg shadow-md p-6 flex flex-col h-[calc(100vh-12rem)]">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">
+          {/* Right side - Scanned data display */}
+          <div className="bg-white rounded-lg shadow-md p-4 lg:p-6 order-2 xl:order-2">
+            <h2 className="text-lg lg:text-xl font-bold text-gray-800 mb-4">
               📄 Parsed Data
             </h2>
 
             {scannedData ? (
-              <div className="space-y-4 overflow-y-auto flex-1 pr-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-                {/* Primary Fields */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-4 max-h-[60vh] lg:max-h-[70vh] xl:max-h-[calc(100vh-12rem)] overflow-y-auto">
+                {/* Primary Fields - Responsive grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3 lg:gap-4">
                   <div className="bg-blue-50 p-3 rounded-md border-l-4 border-blue-500">
                     <label className="text-xs font-semibold text-blue-600 uppercase tracking-wide">
                       Vendor Code
                     </label>
-                    <p className="text-lg font-bold text-gray-900 mt-1">
+                    <p className="text-base lg:text-lg font-bold text-gray-900 mt-1 break-all">
                       {scannedData.vendorCode || "N/A"}
                     </p>
                   </div>
@@ -351,7 +388,7 @@ const JobCard = () => {
                     <label className="text-xs font-semibold text-green-600 uppercase tracking-wide">
                       PO Number
                     </label>
-                    <p className="text-lg font-bold text-gray-900 mt-1">
+                    <p className="text-base lg:text-lg font-bold text-gray-900 mt-1 break-all">
                       {scannedData.poNumber || "N/A"}
                     </p>
                   </div>
@@ -360,7 +397,7 @@ const JobCard = () => {
                     <label className="text-xs font-semibold text-purple-600 uppercase tracking-wide">
                       Invoice Number
                     </label>
-                    <p className="text-lg font-bold text-gray-900 mt-1">
+                    <p className="text-base lg:text-lg font-bold text-gray-900 mt-1 break-all">
                       {scannedData.invoiceNumber || "N/A"}
                     </p>
                   </div>
@@ -369,7 +406,7 @@ const JobCard = () => {
                     <label className="text-xs font-semibold text-orange-600 uppercase tracking-wide">
                       Date
                     </label>
-                    <p className="text-lg font-bold text-gray-900 mt-1">
+                    <p className="text-base lg:text-lg font-bold text-gray-900 mt-1 break-all">
                       {scannedData.date || "N/A"}
                     </p>
                   </div>
@@ -378,7 +415,7 @@ const JobCard = () => {
                     <label className="text-xs font-semibold text-red-600 uppercase tracking-wide">
                       Vehicle Number
                     </label>
-                    <p className="text-lg font-bold text-gray-900 mt-1">
+                    <p className="text-base lg:text-lg font-bold text-gray-900 mt-1 break-all">
                       {scannedData.vehicleNumber || "N/A"}
                     </p>
                   </div>
@@ -387,27 +424,27 @@ const JobCard = () => {
                     <label className="text-xs font-semibold text-indigo-600 uppercase tracking-wide">
                       Part Number
                     </label>
-                    <p className="text-lg font-bold text-gray-900 mt-1">
+                    <p className="text-base lg:text-lg font-bold text-gray-900 mt-1 break-all">
                       {scannedData.partNumber || "N/A"}
                     </p>
                   </div>
 
-                  <div className="bg-pink-50 p-3 rounded-md border-l-4 border-pink-500">
+                  <div className="bg-pink-50 p-3 rounded-md border-l-4 border-pink-500 sm:col-span-2 xl:col-span-1">
                     <label className="text-xs font-semibold text-pink-600 uppercase tracking-wide">
                       Quantity
                     </label>
-                    <p className="text-lg font-bold text-gray-900 mt-1">
+                    <p className="text-base lg:text-lg font-bold text-gray-900 mt-1 break-all">
                       {scannedData.quantity || "N/A"}
                     </p>
                   </div>
                 </div>
 
-                {/* Additional Fields */}
+                {/* Additional Fields - Collapsible on mobile */}
                 <div className="mt-6">
-                  <h3 className="text-lg font-semibold text-gray-700 mb-3">
+                  <h3 className="text-base lg:text-lg font-semibold text-gray-700 mb-3">
                     Additional Fields
                   </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-2 lg:gap-3">
                     {[
                       { label: "Field 5", value: scannedData.field5 },
                       { label: "Field 6", value: scannedData.field6 },
@@ -418,11 +455,14 @@ const JobCard = () => {
                       { label: "Field 13", value: scannedData.field13 },
                       { label: "Field 15", value: scannedData.field15 },
                     ].map((field, index) => (
-                      <div key={index} className="bg-gray-50 p-2 rounded-md">
-                        <label className="text-xs font-medium text-gray-500 uppercase">
+                      <div
+                        key={index}
+                        className="bg-gray-50 p-2 lg:p-3 rounded-md"
+                      >
+                        <label className="text-xs font-medium text-gray-500 uppercase block">
                           {field.label}
                         </label>
-                        <p className="text-sm font-semibold text-gray-900 mt-1 break-all">
+                        <p className="text-xs lg:text-sm font-semibold text-gray-900 mt-1 break-all">
                           {field.value || "N/A"}
                         </p>
                       </div>
@@ -430,23 +470,26 @@ const JobCard = () => {
                   </div>
                 </div>
 
-                {/* Raw Data Section */}
-                <div className="mt-6 p-4 bg-gray-100 rounded-md">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                {/* Raw Data Section - Collapsible on mobile */}
+                <div className="mt-6 p-3 lg:p-4 bg-gray-100 rounded-md">
+                  <h3 className="text-sm lg:text-base font-semibold text-gray-700 mb-2">
                     Raw Data
                   </h3>
-                  <p className="text-xs font-mono text-gray-600 break-all">
-                    {scannedData.rawData}
-                  </p>
+                  <div className="bg-white p-2 lg:p-3 rounded border max-h-24 lg:max-h-32 overflow-y-auto">
+                    <p className="text-xs font-mono text-gray-600 break-all leading-relaxed">
+                      {scannedData.rawData}
+                    </p>
+                  </div>
                   <p className="text-xs text-gray-500 mt-2">
                     Total fields parsed: {scannedData.totalParts}
                   </p>
                 </div>
 
+                {/* Process button - Full width on mobile */}
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <button
                     onClick={() => handleProcessData(scannedData)}
-                    className={`w-full font-bold py-3 px-4 rounded-md transition-colors duration-200 flex items-center justify-center ${
+                    className={`w-full font-medium lg:font-bold py-3 px-4 rounded-md transition-colors duration-200 flex items-center justify-center text-sm lg:text-base ${
                       loading
                         ? "bg-gray-400 cursor-not-allowed text-gray-200"
                         : success
@@ -458,7 +501,7 @@ const JobCard = () => {
                     {loading ? (
                       <>
                         <svg
-                          className="animate-spin w-5 h-5 mr-2"
+                          className="animate-spin w-4 h-4 lg:w-5 lg:h-5 mr-2"
                           viewBox="0 0 24 24"
                         >
                           <circle
@@ -481,7 +524,7 @@ const JobCard = () => {
                     ) : success ? (
                       <>
                         <svg
-                          className="w-5 h-5 mr-2"
+                          className="w-4 h-4 lg:w-5 lg:h-5 mr-2"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -498,7 +541,7 @@ const JobCard = () => {
                     ) : (
                       <>
                         <svg
-                          className="w-5 h-5 mr-2"
+                          className="w-4 h-4 lg:w-5 lg:h-5 mr-2"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -517,9 +560,10 @@ const JobCard = () => {
                 </div>
               </div>
             ) : (
-              <div className="text-center py-12 flex-1 flex flex-col justify-center">
+              /* Empty state - responsive */
+              <div className="text-center py-8 lg:py-12 flex flex-col justify-center min-h-[300px] lg:min-h-[400px]">
                 <svg
-                  className="w-16 h-16 text-gray-300 mx-auto mb-4"
+                  className="w-12 h-12 lg:w-16 lg:h-16 text-gray-300 mx-auto mb-4"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -531,14 +575,43 @@ const JobCard = () => {
                     d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                   />
                 </svg>
-                <p className="text-gray-500 text-lg">No data scanned yet</p>
-                <p className="text-gray-400 text-sm mt-2">
-                  Scan or enter a barcode on the left to see the parsed data
-                  here
+                <p className="text-gray-500 text-base lg:text-lg font-medium">
+                  No data scanned yet
+                </p>
+                <p className="text-gray-400 text-xs lg:text-sm mt-2 px-4">
+                  Scan or enter a barcode to see the parsed data here
                 </p>
               </div>
             )}
           </div>
+        </div>
+
+        {/* Demo helper - positioned at bottom on mobile */}
+        <div className="mt-6 lg:mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h3 className="text-sm lg:text-base font-semibold text-blue-800 mb-2">
+            🧪 Demo Mode
+          </h3>
+          <p className="text-xs lg:text-sm text-blue-700 mb-3">
+            Try entering this sample barcode data:
+          </p>
+          <div className="bg-white p-2 lg:p-3 rounded border font-mono text-xs lg:text-sm break-all overflow-x-auto">
+            L059 1609036 1B25007182 20.06.2025 34AAACL3763E1ZS 651221.22
+            508766.58 HR55AR1081 0.00 142454.64 0.00 31400M52T10 85114000 126
+            4037.83
+          </div>
+          <button
+            onClick={() => {
+              const sampleData =
+                "L059 1609036 1B25007182 20.06.2025 34AAACL3763E1ZS 651221.22 508766.58 HR55AR1081 0.00 142454.64 0.00 31400M52T10 85114000 126 4037.83";
+              setJobNo(sampleData);
+              const parsedData = parseBarcodeData(sampleData);
+              setScannedData(parsedData);
+            }}
+            className="mt-3 w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors duration-200 text-sm"
+            disabled={loading}
+          >
+            Load Sample Data
+          </button>
         </div>
       </div>
     </div>

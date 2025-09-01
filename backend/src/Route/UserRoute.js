@@ -17,6 +17,7 @@ router.get("/users", authMiddleware, async (req, res) => {
       users: users,
     });
   } catch (err) {
+    console.error("Get users error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -38,6 +39,7 @@ router.get("/:id", authMiddleware, async (req, res) => {
       user: user,
     });
   } catch (err) {
+    console.error("Get single user error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -49,6 +51,21 @@ router.post("/create", async (req, res) => {
 
     const { name, email, employeeId, role, password, status, permissions } =
       req.body;
+
+    // Validation
+    if (!name || !email || !employeeId || !role || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "All required fields must be provided",
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters long",
+      });
+    }
 
     // Check if user already exists
     const existingUser = await User.findOne({
@@ -64,25 +81,27 @@ router.post("/create", async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Convert string permissions to boolean
+    // Handle permissions - now expecting boolean values directly from frontend
     const convertedPermissions = {
-      partMaster: permissions?.partMaster === "Access",
-      dispatch: permissions?.dispatch === "Access",
-      scanner: permissions?.scanner === "Access",
-      admin: permissions?.Admin === "Access", // Note: frontend sends "Admin", backend stores as "admin"
+      partMaster: Boolean(permissions?.partMaster),
+      dispatch: Boolean(permissions?.dispatch),
+      scanner: Boolean(permissions?.scanner),
+      admin: Boolean(permissions?.admin), // Consistent key name
     };
 
     console.log("Converted permissions:", convertedPermissions);
 
     const newUser = new User({
-      name,
-      email,
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
       employeeId,
-      role,
+      role: role.trim(),
       password: hashedPassword,
       status: status || "Active",
       permissions: convertedPermissions,
-      createdBy: new mongoose.Types.ObjectId(),
+      createdBy: req.user?.id
+        ? new mongoose.Types.ObjectId(req.user.id)
+        : new mongoose.Types.ObjectId(),
     });
 
     await newUser.save();
@@ -110,32 +129,105 @@ router.put("/users/:id", authMiddleware, async (req, res) => {
     console.log("Update data received:", updateData);
     console.log("ID parameter:", id);
 
-    // If password is being updated, hash it
+    // Validation for required fields
+    if (updateData.name && !updateData.name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Name cannot be empty",
+      });
+    }
+
+    if (updateData.email && !updateData.email.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Email cannot be empty",
+      });
+    }
+
+    // If password is being updated, validate and hash it
     if (updateData.password) {
+      if (updateData.password.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must be at least 6 characters long",
+        });
+      }
       updateData.password = await bcrypt.hash(updateData.password, 10);
     }
 
-    // Convert string permissions to boolean if permissions are being updated
+    // Handle permissions - now expecting boolean values directly from frontend
     if (updateData.permissions) {
       updateData.permissions = {
-        partMaster: updateData.permissions.partMaster === "Access",
-        dispatch: updateData.permissions.dispatch === "Access",
-        scanner: updateData.permissions.scanner === "Access",
-        admin: updateData.permissions.Admin === "Access",
+        partMaster: Boolean(updateData.permissions.partMaster),
+        dispatch: Boolean(updateData.permissions.dispatch),
+        scanner: Boolean(updateData.permissions.scanner),
+        admin: Boolean(updateData.permissions.admin), // Consistent key name
       };
       console.log("Converted permissions for update:", updateData.permissions);
     }
+
+    // Trim string fields
+    if (updateData.name) updateData.name = updateData.name.trim();
+    if (updateData.email)
+      updateData.email = updateData.email.trim().toLowerCase();
+    if (updateData.role) updateData.role = updateData.role.trim();
 
     let updatedUser;
 
     // Check if ID is a valid MongoDB ObjectId (24 char hex string)
     if (mongoose.Types.ObjectId.isValid(id) && id.length === 24) {
+      // Check for duplicate email/employeeId (excluding current user)
+      if (updateData.email || updateData.employeeId) {
+        const duplicateQuery = { _id: { $ne: id } };
+        if (updateData.email && updateData.employeeId) {
+          duplicateQuery.$or = [
+            { email: updateData.email },
+            { employeeId: updateData.employeeId },
+          ];
+        } else if (updateData.email) {
+          duplicateQuery.email = updateData.email;
+        } else if (updateData.employeeId) {
+          duplicateQuery.employeeId = updateData.employeeId;
+        }
+
+        const duplicate = await User.findOne(duplicateQuery);
+        if (duplicate) {
+          return res.status(400).json({
+            success: false,
+            message: "Email or Employee ID already exists",
+          });
+        }
+      }
+
       // Use findByIdAndUpdate for MongoDB _id
       updatedUser = await User.findByIdAndUpdate(id, updateData, {
         new: true,
         runValidators: true,
       }).select("-password");
     } else {
+      // Check for duplicate email/employeeId (excluding current user)
+      if (updateData.email || updateData.employeeId) {
+        const duplicateQuery = { employeeId: { $ne: id } };
+        if (updateData.email && updateData.employeeId) {
+          duplicateQuery.$or = [
+            { email: updateData.email },
+            { employeeId: updateData.employeeId },
+          ];
+        } else if (updateData.email) {
+          duplicateQuery.email = updateData.email;
+        } else if (updateData.employeeId) {
+          duplicateQuery.employeeId = updateData.employeeId;
+        }
+
+        const duplicate = await User.findOne(duplicateQuery);
+        if (duplicate) {
+          return res.status(400).json({
+            success: false,
+            message: "Email or Employee ID already exists",
+          });
+        }
+      }
+
       // Use findOneAndUpdate for employeeId
       updatedUser = await User.findOneAndUpdate(
         { employeeId: id },
@@ -164,7 +256,6 @@ router.put("/users/:id", authMiddleware, async (req, res) => {
   }
 });
 
-// Delete user
 // Delete user - handles both MongoDB _id and employeeId
 router.delete("/users/:id", authMiddleware, async (req, res) => {
   try {
@@ -203,8 +294,19 @@ router.post("/userLogin", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Find user by email
-    const user = await User.findOne({ email });
+    // Validation
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
+    }
+
+    // Find user by email (case insensitive)
+    const user = await User.findOne({
+      email: email.trim().toLowerCase(),
+    });
+
     if (!user) {
       return res
         .status(401)
@@ -219,14 +321,14 @@ router.post("/userLogin", async (req, res) => {
         .json({ success: false, message: "Invalid credentials" });
     }
 
-    // ✅ Corrected status check
+    // Check if user is active
     if (user.status !== "Active") {
       return res
         .status(401)
         .json({ success: false, message: "Account is inactive" });
     }
 
-    // Return user without password (JWT can be added later)
+    // Return user data without password
     res.json({
       success: true,
       message: "Login successful",
@@ -240,8 +342,69 @@ router.post("/userLogin", async (req, res) => {
         status: user.status,
         permissions: user.permissions,
       },
+      token: "dummy-token", // Add proper JWT token generation here if needed
     });
   } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Admin login route (if different from user login)
+router.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
+    }
+
+    // Find admin user
+    const admin = await User.findOne({
+      email: email.trim().toLowerCase(),
+      "permissions.admin": true, // Only admin users
+    });
+
+    if (!admin) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Invalid admin credentials" });
+    }
+
+    // Check password
+    const isPasswordValid = await bcrypt.compare(password, admin.password);
+    if (!isPasswordValid) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Invalid admin credentials" });
+    }
+
+    // Check if admin is active
+    if (admin.status !== "Active") {
+      return res
+        .status(401)
+        .json({ success: false, message: "Admin account is inactive" });
+    }
+
+    res.json({
+      success: true,
+      message: "Admin login successful",
+      admin: {
+        _id: admin._id,
+        name: admin.name,
+        email: admin.email,
+        employeeId: admin.employeeId,
+        role: admin.role,
+        status: admin.status,
+        permissions: admin.permissions,
+      },
+      token: "dummy-token", // Add proper JWT token generation here if needed
+    });
+  } catch (err) {
+    console.error("Admin login error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
