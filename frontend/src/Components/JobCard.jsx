@@ -82,7 +82,7 @@ const JobCard = () => {
     console.log("🚀 Sending to API:", { barcodeData });
 
     try {
-      const response = await api.post("/api/scan", {
+      const response = await api.post("/api/scan/", {
         barcodeData,
       });
 

@@ -83,18 +83,92 @@ const parseQRCodeData = (qrCodeText) => {
       date = allDateMatches[0];
     }
 
-    // Extract invoice-like numbers (long alphanumeric sequences)
-    const invoicePattern = /[A-Z0-9]{10,}/g;
-    const invoiceMatches = remainingText.match(invoicePattern);
+    // Replace the invoice number extraction section in your backend parseQRCodeData function
+    // Around line 90-110 in your backend route file
+
+    // UPDATED: Extract invoice number - first 10 characters after date
     let invoiceNumber = "";
 
-    if (invoiceMatches) {
-      // Get the longest match as it's likely the invoice number
-      invoiceNumber = invoiceMatches.reduce(
-        (longest, current) =>
-          current.length > longest.length ? current : longest,
-        ""
+    if (date) {
+      // Find the position of the date in the remaining text
+      const dateIndex = remainingText.indexOf(date);
+      if (dateIndex !== -1) {
+        // Get text after the date
+        const afterDate = remainingText.substring(dateIndex + date.length);
+
+        // Remove any spaces and extract first 10 alphanumeric characters
+        const cleanAfterDate = afterDate.replace(/\s/g, "");
+
+        if (cleanAfterDate.length >= 10) {
+          // Extract exactly 10 characters (letters and numbers) after the date
+          invoiceNumber = cleanAfterDate.substring(0, 10);
+          console.log(
+            "Backend extracted 10-character invoice number after date:",
+            invoiceNumber
+          );
+        } else {
+          // If less than 10 characters available, try pattern matching
+          const invoiceMatch = cleanAfterDate.match(/^([A-Z0-9]{1,10})/);
+          if (invoiceMatch) {
+            invoiceNumber = invoiceMatch[1];
+            console.log(
+              "Backend extracted partial invoice number:",
+              invoiceNumber
+            );
+          }
+        }
+      }
+    }
+
+    // Alternative approach: Look for the pattern in the entire remaining text
+    if (!invoiceNumber) {
+      // Look for pattern: date (6 digits) followed immediately by 10 alphanumeric characters
+      const fullPatternMatch = remainingText.match(
+        /\d{2}\/\d{2}\/\d{2}\s*([A-Z0-9]{10})/
       );
+      if (fullPatternMatch) {
+        invoiceNumber = fullPatternMatch[1];
+        console.log(
+          "Backend extracted invoice number using full pattern:",
+          invoiceNumber
+        );
+      }
+    }
+
+    // If no invoice number found using the specific pattern, use fallback
+    if (!invoiceNumber) {
+      invoiceNumber = "UNKNOWN";
+      console.log(
+        "Backend: No invoice found using date pattern, using fallback:",
+        invoiceNumber
+      );
+    }
+
+    // And also update the parseQRCodeDataAlternative function's invoice extraction:
+
+    // UPDATED: Extract invoice number - first 10 characters after date
+ 
+
+    if (dateMatch) {
+      // Find the position of the date in the remaining text
+      const dateIndex = remainingText.indexOf(dateMatch[0]);
+      if (dateIndex !== -1) {
+        // Get text after the date
+        const afterDate = remainingText.substring(
+          dateIndex + dateMatch[0].length
+        );
+
+        // Remove any spaces and extract first 10 alphanumeric characters
+        const cleanAfterDate = afterDate.replace(/\s/g, "");
+
+        if (cleanAfterDate.length >= 10) {
+          invoiceNumber = cleanAfterDate.substring(0, 10);
+          console.log(
+            "Alternative method extracted 10-character invoice:",
+            invoiceNumber
+          );
+        }
+      }
     }
 
     // Validate parsed data
@@ -117,7 +191,7 @@ const parseQRCodeData = (qrCodeText) => {
       quantity,
       descriptionOrPartName,
       date: date || new Date().toLocaleDateString("en-GB"),
-      invoiceNumber: invoiceNumber || "UNKNOWN",
+      invoiceNumber, // Now contains exactly 10 characters after date
       rawQRData: qrCodeText,
     };
 
@@ -137,7 +211,7 @@ const parseQRCodeData = (qrCodeText) => {
   }
 };
 
-// Alternative parsing approach
+// Updated alternative parsing approach
 const parseQRCodeDataAlternative = (qrCodeText) => {
   try {
     console.log("Alternative parsing for QR Code:", qrCodeText);
@@ -185,15 +259,25 @@ const parseQRCodeDataAlternative = (qrCodeText) => {
       ? dateMatch[0]
       : new Date().toLocaleDateString("en-GB");
 
-    // Extract invoice number
-    const invoiceMatches = remainingText.match(/[A-Z0-9]{10,}/g);
-    const invoiceNumber = invoiceMatches
-      ? invoiceMatches.reduce(
-          (longest, current) =>
-            current.length > longest.length ? current : longest,
-          ""
-        )
-      : "UNKNOWN";
+    // UPDATED: Extract invoice number - first 10 characters after date
+    let invoiceNumber = "UNKNOWN";
+    
+    if (dateMatch) {
+      // Find the position of the date in the remaining text
+      const dateIndex = remainingText.indexOf(dateMatch[0]);
+      if (dateIndex !== -1) {
+        // Get text after the date
+        const afterDate = remainingText.substring(dateIndex + dateMatch[0].length);
+        
+        // Remove any spaces and extract first 10 alphanumeric characters
+        const cleanAfterDate = afterDate.replace(/\s/g, "");
+        
+        if (cleanAfterDate.length >= 10) {
+          invoiceNumber = cleanAfterDate.substring(0, 10);
+          console.log("Alternative method extracted 10-character invoice:", invoiceNumber);
+        }
+      }
+    }
 
     const result = {
       binNo,
@@ -209,9 +293,13 @@ const parseQRCodeDataAlternative = (qrCodeText) => {
     return result;
   } catch (error) {
     console.error("Alternative QR Parsing Error:", error);
-    throw new Error(`Failed to parse QR code (alternative): ${error.message}`);
+    throw new Error(
+      `Failed to parse QR code (alternative): ${error.message}`
+    );
   }
 };
+
+
 
 // Route to store bin data from QR code (POST)
 router.post("/bindata/qr", async (req, res) => {
@@ -333,7 +421,8 @@ router.get("/bindata/bin/:binNo", async (req, res) => {
   }
 });
 
-// Route to update scan progress with enhanced tracking (POST)
+
+// Route to update scan progress with sequence counter (POST) - FIXED
 router.post("/bindata/scan-progress", async (req, res) => {
   try {
     const { binNo, scannedQuantity, scannedBy, isValid, mismatchReason } =
@@ -355,19 +444,202 @@ router.post("/bindata/scan-progress", async (req, res) => {
       });
     }
 
-    // Update scan progress with enhanced tracking
-    await binData.updateScanProgress(scannedQuantity, {
-      scannedBy: scannedBy || "system",
-      isValid: isValid !== false,
-      mismatchReason: mismatchReason,
-    });
+    // Initialize scanSequence if it doesn't exist
+    if (!binData.scanSequence) {
+      binData.scanSequence = 0;
+    }
+
+    // Initialize scannedQuantity if it doesn't exist
+    if (!binData.scannedQuantity) {
+      binData.scannedQuantity = 0;
+    }
+
+    // Increment scan sequence
+    binData.scanSequence += 1;
+
+    // Update scanned quantity (this could be cumulative or the latest scan)
+    binData.scannedQuantity = scannedQuantity;
+
+    // Update scan metadata
+    binData.lastScannedAt = new Date();
+    binData.scannedBy = scannedBy || "system";
+    
+    if (isValid !== undefined) {
+      binData.isValid = isValid;
+    }
+    
+    if (mismatchReason) {
+      binData.mismatchReason = mismatchReason;
+    }
+
+    // Calculate completion percentage
+    const completionPercentage = Math.min(
+      Math.round((scannedQuantity / binData.quantity) * 100),
+      100
+    );
+    binData.completionPercentage = completionPercentage;
+
+    // Update status based on completion - FIXED: Use correct enum values
+    if (completionPercentage >= 100) {
+      binData.status = "completed";
+      binData.completedAt = new Date();
+    } else if (completionPercentage > 0) {
+      binData.status = "in_progress"; // FIXED: Changed from "in-progress" to "in_progress"
+    }
+
+    // Save the updated bin data
+    const updatedBinData = await binData.save();
 
     res.status(200).json({
       success: true,
       message: "Scan progress updated successfully",
-      data: binData,
-      isCompleted: binData.status === "completed",
-      completionPercentage: binData.completionPercentage,
+      data: {
+        binNo: updatedBinData.binNo,
+        scanSequence: updatedBinData.scanSequence,
+        scannedQuantity: updatedBinData.scannedQuantity,
+        totalQuantity: updatedBinData.quantity,
+        completionPercentage: updatedBinData.completionPercentage,
+        status: updatedBinData.status,
+        lastScannedAt: updatedBinData.lastScannedAt,
+        scannedBy: updatedBinData.scannedBy,
+        isValid: updatedBinData.isValid,
+        mismatchReason: updatedBinData.mismatchReason
+      },
+      isCompleted: updatedBinData.status === "completed",
+      completionPercentage: updatedBinData.completionPercentage,
+      scanCount: updatedBinData.scanSequence
+    });
+  } catch (error) {
+    console.error("Scan progress update error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+});
+
+// Route to reset scan sequence for a bin (POST) - FIXED
+router.post("/bindata/reset-scan/:binNo", async (req, res) => {
+  try {
+    const { binNo } = req.params;
+
+    const binData = await BinData.findOne({ binNo });
+
+    if (!binData) {
+      return res.status(404).json({
+        success: false,
+        message: "Bin data not found",
+      });
+    }
+
+    // Reset scan-related fields - FIXED: Use correct enum value
+    binData.scanSequence = 0;
+    binData.scannedQuantity = 0;
+    binData.completionPercentage = 0;
+    binData.status = "pending"; // This is correct according to schema
+    binData.lastScannedAt = null;
+    binData.scannedBy = null;
+    binData.isValid = true;
+    binData.mismatchReason = null;
+    binData.completedAt = null;
+
+    const updatedBinData = await binData.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Scan sequence reset successfully",
+      data: {
+        binNo: updatedBinData.binNo,
+        scanSequence: updatedBinData.scanSequence,
+        status: updatedBinData.status
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+});
+
+// Route to get scan statistics for a bin (GET)
+router.get("/bindata/scan-stats/:binNo", async (req, res) => {
+  try {
+    const { binNo } = req.params;
+
+    const binData = await BinData.findOne({ binNo });
+
+    if (!binData) {
+      return res.status(404).json({
+        success: false,
+        message: "Bin data not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Scan statistics retrieved successfully",
+      data: {
+        binNo: binData.binNo,
+        totalScans: binData.scanSequence || 0,
+        scannedQuantity: binData.scannedQuantity || 0,
+        totalQuantity: binData.quantity,
+        completionPercentage: binData.completionPercentage || 0,
+        status: binData.status,
+        lastScannedAt: binData.lastScannedAt,
+        scannedBy: binData.scannedBy,
+        isValid: binData.isValid,
+        mismatchReason: binData.mismatchReason,
+        createdAt: binData.createdAt,
+        updatedAt: binData.updatedAt
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+});
+
+// Route to reset scan sequence for a bin (POST)
+router.post("/bindata/reset-scan/:binNo", async (req, res) => {
+  try {
+    const { binNo } = req.params;
+
+    const binData = await BinData.findOne({ binNo });
+
+    if (!binData) {
+      return res.status(404).json({
+        success: false,
+        message: "Bin data not found",
+      });
+    }
+
+    // Reset scan-related fields
+    binData.scanSequence = 0;
+    binData.scannedQuantity = 0;
+    binData.completionPercentage = 0;
+    binData.status = "pending";
+    binData.lastScannedAt = null;
+    binData.scannedBy = null;
+    binData.isValid = true;
+    binData.mismatchReason = null;
+    binData.completedAt = null;
+
+    const updatedBinData = await binData.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Scan sequence reset successfully",
+      data: {
+        binNo: updatedBinData.binNo,
+        scanSequence: updatedBinData.scanSequence,
+        status: updatedBinData.status
+      }
     });
   } catch (error) {
     res.status(500).json({
