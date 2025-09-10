@@ -65,6 +65,13 @@ app.use(productionRoutes);
 const invoiceRoutes = require("./src/Route/InvoiceRoute");
 app.use(invoiceRoutes);
 
+
+const operatorLogin = require("./src/Route/OperatorRoute");
+app.use(operatorLogin);
+
+const statisticsRoutes = require("./src/Route/StatisticsRoute");
+app.use("/api/statistics", statisticsRoutes);
+
 // ADD THIS LINE - Barcode scan routes
 const barcodeRoutes = require("./src/Route/InvoiceRoute");
 app.use("/api/scan", barcodeRoutes);

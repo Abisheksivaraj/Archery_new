@@ -123,7 +123,7 @@ const DrawerHeader = styled("div")(({ theme }) => ({
   },
 }));
 
-// Permission Check Hook
+// Enhanced Permission Check Hook with Operator support
 const usePermissions = () => {
   const getPermissions = () => {
     try {
@@ -154,9 +154,37 @@ const usePermissions = () => {
     return role && role.toLowerCase() === "admin";
   };
 
-  const hasPermission = (perm) => {
-    if (isAdmin()) return true;
+  // New function to check if user is operator
+  const isOperator = () => {
+    const role = getRole();
+    return role && role.toLowerCase() === "operator";
+  };
 
+  const hasPermission = (perm) => {
+    console.log("Drawer: Checking permission:", perm, "for role:", getRole()); // Debug log
+
+    // Admin has all permissions
+    if (isAdmin()) {
+      console.log("Drawer: Admin access granted");
+      return true;
+    }
+
+    // Operator has specific permissions - handle this BEFORE regular permission check
+    if (isOperator()) {
+      const operatorPermissions = ["scan_invoice", "view_dispatch"];
+      const hasAccess = operatorPermissions.includes(perm);
+      console.log(
+        "Drawer: Operator permission check:",
+        perm,
+        "in",
+        operatorPermissions,
+        "=",
+        hasAccess
+      );
+      return hasAccess;
+    }
+
+    // Regular permission check for other roles
     const permissions = getPermissions();
     const permissionMap = {
       manage_parts: "partMaster",
@@ -166,20 +194,67 @@ const usePermissions = () => {
     };
 
     const actualPermissionKey = permissionMap[perm];
-    return (
+    const hasRegularPermission =
       permissions &&
       typeof permissions === "object" &&
-      permissions[actualPermissionKey] === true
+      permissions[actualPermissionKey] === true;
+
+    console.log(
+      "Drawer: Regular permission check:",
+      perm,
+      "->",
+      actualPermissionKey,
+      "=",
+      hasRegularPermission
     );
+    return hasRegularPermission;
   };
 
-  return { isAdmin, hasPermission, getRole, getPermissions };
+  return { isAdmin, isOperator, hasPermission, getRole, getPermissions };
+};
+
+
+const useUserInfo = () => {
+  const getUserInfo = () => {
+    try {
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        return JSON.parse(storedUser);
+      }
+      return null;
+    } catch (error) {
+      console.warn("Failed to parse user info:", error);
+      return null;
+    }
+  };
+
+  const getOperatorId = () => {
+    const user = getUserInfo();
+    return user?.operatorId || null;
+  };
+
+  const getUserRole = () => {
+    const user = getUserInfo();
+    return user?.role || localStorage.getItem("role") || "";
+  };
+
+  const getUserDisplayName = () => {
+    const user = getUserInfo();
+    if (user?.operatorId) {
+      return `Operator Id: ${user.operatorId}`;
+    }
+    // For other user types, you might want to display username or name
+    return user?.username || user?.name || "User";
+  };
+
+  return { getUserInfo, getOperatorId, getUserRole, getUserDisplayName };
 };
 
 // Mobile-friendly drawer content
 const MobileDrawerContent = ({
   open,
   isAdmin,
+  isOperator,
   hasPermission,
   handleMenuClick,
   handlePartMasterClick,
@@ -248,8 +323,8 @@ const MobileDrawerContent = ({
           </ListItemButton>
         </ListItem>
 
-        {/* Part Master - Protected */}
-        {(isAdmin() || hasPermission("manage_parts")) && (
+        {/* Part Master - Hidden for operators, visible for admin and users with manage_parts permission */}
+        {!isOperator() && (isAdmin() || hasPermission("manage_parts")) && (
           <>
             <ListItem disablePadding sx={{ mb: 1 }}>
               <ListItemButton
@@ -321,8 +396,8 @@ const MobileDrawerContent = ({
           </>
         )}
 
-        {/* Invoice Scanning - Protected */}
-        {(isAdmin() || hasPermission("scan_invoice")) && (
+        {/* Invoice Scanning - Visible for operators, admin, and users with scan_invoice permission */}
+        {(isOperator() || isAdmin() || hasPermission("scan_invoice")) && (
           <ListItem disablePadding sx={{ mb: 1 }}>
             <ListItemButton
               selected={isActive("/Card")}
@@ -348,8 +423,8 @@ const MobileDrawerContent = ({
           </ListItem>
         )}
 
-        {/* Dispatch - Protected */}
-        {(isAdmin() || hasPermission("view_dispatch")) && (
+        {/* Dispatch - Visible for operators, admin, and users with view_dispatch permission */}
+        {(isOperator() || isAdmin() || hasPermission("view_dispatch")) && (
           <ListItem disablePadding sx={{ mb: 1 }}>
             <ListItemButton
               selected={isActive("/dispatch")}
@@ -375,8 +450,8 @@ const MobileDrawerContent = ({
           </ListItem>
         )}
 
-        {/* User Master - Protected */}
-        {(isAdmin() || hasPermission("manage_users")) && (
+        {/* User Master - Hidden for operators, visible for admin and users with manage_users permission */}
+        {!isOperator() && (isAdmin() || hasPermission("manage_users")) && (
           <ListItem disablePadding sx={{ mb: 1 }}>
             <ListItemButton
               selected={isActive("/user")}
@@ -468,7 +543,8 @@ function PersistentDrawerLeft() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const isTablet = useMediaQuery(theme.breakpoints.between("md", "lg"));
-  const { isAdmin, hasPermission } = usePermissions();
+  const { isAdmin, isOperator, hasPermission } = usePermissions();
+   const { getUserDisplayName, getOperatorId } = useUserInfo();
 
   const [open, setOpen] = useState(() => {
     if (isMobile) return false;
@@ -715,8 +791,8 @@ function PersistentDrawerLeft() {
           </ListItem>
         </ListItemWithTooltip>
 
-        {/* Part Master - Protected */}
-        {(isAdmin() || hasPermission("manage_parts")) && (
+        {/* Part Master - Hidden for operators, visible for admin and users with manage_parts permission */}
+        {!isOperator() && (isAdmin() || hasPermission("manage_parts")) && (
           <ListItemWithTooltip tooltip="Part Master">
             <ListItem disablePadding>
               <ListItemButton
@@ -738,8 +814,8 @@ function PersistentDrawerLeft() {
           </ListItemWithTooltip>
         )}
 
-        {/* Dropdown - Protected */}
-        {(isAdmin() || hasPermission("manage_parts")) && (
+        {/* Dropdown - Hidden for operators, visible for admin and users with manage_parts permission */}
+        {!isOperator() && (isAdmin() || hasPermission("manage_parts")) && (
           <Collapse in={open && dropdownOpen} timeout="auto" unmountOnExit>
             <List component="div" disablePadding>
               <ListItemWithTooltip tooltip="Add Part">
@@ -779,8 +855,8 @@ function PersistentDrawerLeft() {
           </Collapse>
         )}
 
-        {/* Invoice Scanning - Protected */}
-        {(isAdmin() || hasPermission("scan_invoice")) && (
+        {/* Invoice Scanning - Visible for operators, admin, and users with scan_invoice permission */}
+        {(isOperator() || isAdmin() || hasPermission("scan_invoice")) && (
           <ListItemWithTooltip tooltip="Invoice Scanning">
             <ListItem disablePadding>
               <ListItemButton
@@ -799,8 +875,8 @@ function PersistentDrawerLeft() {
           </ListItemWithTooltip>
         )}
 
-        {/* Dispatch - Protected */}
-        {(isAdmin() || hasPermission("view_dispatch")) && (
+        {/* Dispatch - Visible for operators, admin, and users with view_dispatch permission */}
+        {(isOperator() || isAdmin() || hasPermission("view_dispatch")) && (
           <ListItemWithTooltip tooltip="Dispatch">
             <ListItem disablePadding>
               <ListItemButton
@@ -819,8 +895,8 @@ function PersistentDrawerLeft() {
           </ListItemWithTooltip>
         )}
 
-        {/* User Master - Protected */}
-        {(isAdmin() || hasPermission("manage_users")) && (
+        {/* User Master - Hidden for operators, visible for admin and users with manage_users permission */}
+        {!isOperator() && (isAdmin() || hasPermission("manage_users")) && (
           <ListItemWithTooltip tooltip="User Master">
             <ListItem disablePadding>
               <ListItemButton
@@ -935,20 +1011,40 @@ function PersistentDrawerLeft() {
             </IconButton>
           )}
 
+          {/* Left side - Menu name */}
           <Typography
             variant="h6"
             noWrap
             sx={{
               fontSize: isMobile ? "16px" : "18px",
               fontWeight: "bold",
-              flexGrow: isMobile ? 1 : 0,
+              flexGrow: isMobile ? 0 : 1,
+              mr: 2,
             }}
           >
             {selectedMenu}
           </Typography>
 
-          {/* Action buttons */}
-          <Box sx={{ display: "flex", gap: 1 }}>
+          {/* Center/Right side - User info and action buttons */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            {/* User Display Name */}
+            <Typography
+              variant="body2"
+              sx={{
+                fontSize: isMobile ? "12px" : "18px",
+                fontWeight: "600",
+                bgcolor:"black",
+                px: 2,
+                py: 0.5,
+                borderRadius: 2,
+                minWidth: isMobile ? "auto" : "120px",
+                textAlign: "center",
+              }}
+            >
+              {getUserDisplayName()}
+            </Typography>
+
+            {/* Action buttons */}
             {isUserRoute && (
               <Button
                 variant="contained"
@@ -1010,6 +1106,7 @@ function PersistentDrawerLeft() {
           <MobileDrawerContent
             open={true}
             isAdmin={isAdmin}
+            isOperator={isOperator}
             hasPermission={hasPermission}
             handleMenuClick={handleMenuClick}
             handlePartMasterClick={handlePartMasterClick}
@@ -1051,15 +1148,18 @@ function PersistentDrawerLeft() {
       <Main open={open} isMobile={isMobile} isTablet={isTablet}>
         <DrawerHeader />
         <Routes>
-          {/* Public Routes */}
+          {/* Public Routes - Profile hidden for operators */}
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/profile" element={<Profile />} />
+          {!isOperator() && <Route path="/profile" element={<Profile />} />}
 
-          {/* Protected Routes for Part Master */}
+          {/* Protected Routes for Part Master - Blocked for operators */}
           <Route
             path="/part"
             element={
-              <ProtectedRoute requiredPermission="manage_parts">
+              <ProtectedRoute
+                requiredPermission="manage_parts"
+                blockOperator={true}
+              >
                 <PartMaster />
               </ProtectedRoute>
             }
@@ -1067,13 +1167,16 @@ function PersistentDrawerLeft() {
           <Route
             path="/part_Table"
             element={
-              <ProtectedRoute requiredPermission="manage_parts">
+              <ProtectedRoute
+                requiredPermission="manage_parts"
+                blockOperator={true}
+              >
                 <PartTable />
               </ProtectedRoute>
             }
           />
 
-          {/* Protected Routes for Dispatch */}
+          {/* Protected Routes for Dispatch - Available for operators */}
           <Route
             path="/dispatch"
             element={
@@ -1091,7 +1194,7 @@ function PersistentDrawerLeft() {
             }
           />
 
-          {/* Protected Routes for Invoice Scanning */}
+          {/* Protected Routes for Invoice Scanning - Available for operators */}
           <Route
             path="/Card"
             element={
@@ -1109,11 +1212,14 @@ function PersistentDrawerLeft() {
             }
           />
 
-          {/* Protected Routes for User Management */}
+          {/* Protected Routes for User Management - Blocked for operators */}
           <Route
             path="/user"
             element={
-              <ProtectedRoute requiredPermission="manage_users">
+              <ProtectedRoute
+                requiredPermission="manage_users"
+                blockOperator={true}
+              >
                 <PrinterConnection />
               </ProtectedRoute>
             }
