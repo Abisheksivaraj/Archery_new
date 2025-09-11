@@ -302,96 +302,96 @@ const parseQRCodeDataAlternative = (qrCodeText) => {
 
 
 // Route to store bin data from QR code (POST)
-router.post("/bindata/qr", async (req, res) => {
-  try {
-    const { qrCodeData } = req.body;
+// router.post("/bindata/qr", async (req, res) => {
+//   try {
+//     const { qrCodeData } = req.body;
 
-    if (!qrCodeData) {
-      return res.status(400).json({
-        success: false,
-        message: "QR code data is required",
-      });
-    }
+//     if (!qrCodeData) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "QR code data is required",
+//       });
+//     }
 
-    // Parse the QR code data
-    const parsedData = parseQRCodeData(qrCodeData);
+//     // Parse the QR code data
+//     const parsedData = parseQRCodeData(qrCodeData);
 
-    // Validate required fields
-    if (!parsedData.binNo || !parsedData.partNumber || !parsedData.quantity) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid QR code format - missing required fields",
-        parsedData: parsedData,
-      });
-    }
+//     // Validate required fields
+//     if (!parsedData.binNo || !parsedData.partNumber || !parsedData.quantity) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid QR code format - missing required fields",
+//         parsedData: parsedData,
+//       });
+//     }
 
-    // Check if bin already exists
-    const existingBin = await BinData.findOne({ binNo: parsedData.binNo });
-    if (existingBin) {
-      return res.status(409).json({
-        success: false,
-        message: "Bin number already exists",
-        data: existingBin,
-      });
-    }
+//     // Check if bin already exists
+//     const existingBin = await BinData.findOne({ binNo: parsedData.binNo });
+//     if (existingBin) {
+//       return res.status(409).json({
+//         success: false,
+//         message: "Bin number already exists",
+//         data: existingBin,
+//       });
+//     }
 
-    // Create new bin data entry
-    const newBinData = new BinData({
-      binNo: parsedData.binNo,
-      invoiceNumber: parsedData.invoiceNumber,
-      date: parsedData.date,
-      partNumber: parsedData.partNumber,
-      quantity: parsedData.quantity,
-      descriptionOrPartName: parsedData.descriptionOrPartName,
-      rawQRData: parsedData.rawQRData,
-    });
+//     // Create new bin data entry
+//     const newBinData = new BinData({
+//       binNo: parsedData.binNo,
+//       invoiceNumber: parsedData.invoiceNumber,
+//       date: parsedData.date,
+//       partNumber: parsedData.partNumber,
+//       quantity: parsedData.quantity,
+//       descriptionOrPartName: parsedData.descriptionOrPartName,
+//       rawQRData: parsedData.rawQRData,
+//     });
 
-    // Save to database
-    const savedBinData = await newBinData.save();
+//     // Save to database
+//     const savedBinData = await newBinData.save();
 
-    res.status(201).json({
-      success: true,
-      message: "Bin data created successfully from QR code",
-      data: savedBinData,
-      parsedData: parsedData,
-    });
-  } catch (error) {
-    console.error("QR processing error:", error);
+//     res.status(201).json({
+//       success: true,
+//       message: "Bin data created successfully from QR code",
+//       data: savedBinData,
+//       parsedData: parsedData,
+//     });
+//   } catch (error) {
+//     console.error("QR processing error:", error);
 
-    // Handle duplicate bin number error
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: "Duplicate entry detected",
-      });
-    }
+//     // Handle duplicate bin number error
+//     if (error.code === 11000) {
+//       return res.status(409).json({
+//         success: false,
+//         message: "Duplicate entry detected",
+//       });
+//     }
 
-    // Handle validation errors
-    if (error.name === "ValidationError") {
-      return res.status(400).json({
-        success: false,
-        message: "Validation error",
-        errors: Object.values(error.errors).map((e) => e.message),
-      });
-    }
+//     // Handle validation errors
+//     if (error.name === "ValidationError") {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Validation error",
+//         errors: Object.values(error.errors).map((e) => e.message),
+//       });
+//     }
 
-    // Handle parsing errors
-    if (error.message.includes("Failed to parse QR code")) {
-      return res.status(400).json({
-        success: false,
-        message: error.message,
-        originalData: req.body.qrCodeData,
-      });
-    }
+//     // Handle parsing errors
+//     if (error.message.includes("Failed to parse QR code")) {
+//       return res.status(400).json({
+//         success: false,
+//         message: error.message,
+//         originalData: req.body.qrCodeData,
+//       });
+//     }
 
-    // Handle other errors
-    res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: error.message,
-    });
-  }
-});
+//     // Handle other errors
+//     res.status(500).json({
+//       success: false,
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// });
 
 // Route to get bin data by bin number (GET)
 router.get("/bindata/bin/:binNo", async (req, res) => {
@@ -1130,6 +1130,148 @@ router.delete("/bindata/:id", async (req, res) => {
       });
     }
 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Keep only the main route handler that you have at the top:
+router.post("/bindata/qr", async (req, res) => {
+  try {
+    const { qrCodeData, invoiceNumber, sessionId, timestamp, binNumber, partNumber, totalQuantity } = req.body;
+
+    if (!qrCodeData) {
+      return res.status(400).json({
+        success: false,
+        message: "QR code data is required",
+      });
+    }
+
+    // Parse the QR code data
+    const parsedData = parseQRCodeData(qrCodeData);
+
+    // Validate required fields
+    if (!parsedData.binNo || !parsedData.partNumber || !parsedData.quantity) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid QR code format - missing required fields",
+        parsedData: parsedData,
+      });
+    }
+
+    // Check if bin already exists (this is the correct unique constraint)
+    const existingBin = await BinData.findOne({ binNo: parsedData.binNo });
+    if (existingBin) {
+      console.log("Bin already exists, returning existing data:", existingBin.binNo);
+      return res.status(409).json({
+        success: true, // Changed to true since finding existing data is not an error
+        message: "Bin data already exists",
+        data: existingBin,
+        isExisting: true
+      });
+    }
+
+    // Create new bin data entry
+    const newBinData = new BinData({
+      binNo: parsedData.binNo,
+      invoiceNumber: parsedData.invoiceNumber, // Multiple bins can have same invoice
+      date: parsedData.date,
+      partNumber: parsedData.partNumber,
+      quantity: parsedData.quantity,
+      descriptionOrPartName: parsedData.descriptionOrPartName,
+      rawQRData: parsedData.rawQRData,
+      sessionId: sessionId,
+      timestamp: timestamp,
+      scannedQuantity: 0, // Initialize scanning progress
+      status: 'pending', // Use the correct enum value
+      completionPercentage: 0,
+      scanSequence: 0
+    });
+
+    // Save to database
+    const savedBinData = await newBinData.save();
+
+    console.log("New bin data created successfully:", savedBinData.binNo);
+
+    res.status(201).json({
+      success: true,
+      message: "Bin data created successfully from QR code",
+      data: savedBinData,
+      parsedData: parsedData,
+      isExisting: false
+    });
+
+  } catch (error) {
+    console.error("QR processing error:", error);
+
+    // Handle duplicate bin number error (this should be the only duplicate error now)
+    if (error.code === 11000) {
+      // Check if it's a binNo duplicate (expected)
+      if (error.keyValue && error.keyValue.binNo) {
+        try {
+          const existingBin = await BinData.findOne({ binNo: error.keyValue.binNo });
+          return res.status(409).json({
+            success: true,
+            message: "Bin already exists",
+            data: existingBin,
+            isExisting: true
+          });
+        } catch (findError) {
+          console.error("Error finding existing bin:", findError);
+        }
+      }
+
+      // If it's an invoiceNumber duplicate (shouldn't happen after dropping the index)
+      if (error.keyValue && error.keyValue.invoiceNumber) {
+        return res.status(500).json({
+          success: false,
+          message: "Database configuration error: invoiceNumber should not be unique. Please contact system administrator.",
+          error: "Unexpected unique constraint on invoiceNumber"
+        });
+      }
+
+      return res.status(409).json({
+        success: false,
+        message: "Duplicate entry detected",
+        error: error.message
+      });
+    }
+
+    // Handle validation errors
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: Object.values(error.errors).map((e) => e.message),
+      });
+    }
+
+    // Handle parsing errors
+    if (error.message.includes("Failed to parse QR code")) {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+        originalData: req.body.qrCodeData,
+      });
+    }
+
+    // Handle other errors
     res.status(500).json({
       success: false,
       message: "Internal server error",

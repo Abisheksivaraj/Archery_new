@@ -1,4 +1,4 @@
-// models/Statistics.js - Updated with refresh tracking fields
+// models/Statistics.js - FIXED VERSION
 const mongoose = require("mongoose");
 
 const statisticsSchema = new mongoose.Schema(
@@ -79,7 +79,7 @@ const statisticsSchema = new mongoose.Schema(
       default: Date.now,
     },
 
-    // NEW: Refresh tracking fields
+    // Refresh tracking fields
     isRefresh: {
       type: Boolean,
       default: false,
@@ -105,7 +105,7 @@ const statisticsSchema = new mongoose.Schema(
       default: null,
     },
 
-    // NEW: Additional metadata
+    // Additional metadata
     updateHistory: [
       {
         updatedAt: { type: Date, default: Date.now },
@@ -128,12 +128,12 @@ const statisticsSchema = new mongoose.Schema(
   }
 );
 
-// Pre-save middleware to track changes and updates
+// FIXED: Pre-save middleware for findOneAndUpdate operations
 statisticsSchema.pre("findOneAndUpdate", function () {
   const update = this.getUpdate();
 
   // Track the update in history if this is a significant change
-  if (update.isRefresh || update.invoiceRemaining !== undefined) {
+  if (update && (update.isRefresh || update.invoiceRemaining !== undefined)) {
     const historyEntry = {
       updatedAt: new Date(),
       changes: {
@@ -147,8 +147,10 @@ statisticsSchema.pre("findOneAndUpdate", function () {
       sessionId: update.sessionId,
     };
 
-    // Add to update history (limit to last 20 entries)
-    this.update({
+    // FIXED: Use setUpdate instead of this.update()
+    const currentUpdate = this.getUpdate();
+    this.setUpdate({
+      ...currentUpdate,
       $push: {
         updateHistory: {
           $each: [historyEntry],
@@ -157,6 +159,9 @@ statisticsSchema.pre("findOneAndUpdate", function () {
       },
     });
   }
+
+  // Set the updatedAt field
+  this.setUpdate({ ...this.getUpdate(), updatedAt: new Date() });
 });
 
 // Instance method to get refresh summary

@@ -34,6 +34,7 @@ import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import BackpackIcon from "@mui/icons-material/Backpack";
 import PrecisionManufacturingIcon from "@mui/icons-material/PrecisionManufacturing";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import RefreshIcon from "@mui/icons-material/Refresh";
 
 // Utility function for debouncing
 const debounce = (func, wait) => {
@@ -52,15 +53,18 @@ const Dispatch = () => {
   const theme = useTheme();
   const isSmall = useMediaQuery(theme.breakpoints.down("sm"));
 
-  // NEW: Error Dialog States
+  // Error Dialog States
   const [errorDialogOpen, setErrorDialogOpen] = useState(false);
   const [errorDialogData, setErrorDialogData] = useState({
     title: "Error",
     message: "",
-    type: "error", // 'error', 'warning', 'validation'
+    type: "error",
   });
 
-  // NEW: Function to show error dialog
+  // Duplicate Serial Number Prevention State
+  const [scannedSerialNumbers, setScannedSerialNumbers] = useState(new Set());
+
+  // Function to show error dialog
   const showErrorDialog = (message, title = "Error", type = "error") => {
     setErrorDialogData({
       title,
@@ -70,7 +74,7 @@ const Dispatch = () => {
     setErrorDialogOpen(true);
   };
 
-  // NEW: Function to close error dialog
+  // Function to close error dialog
   const closeErrorDialog = () => {
     setErrorDialogOpen(false);
     setErrorDialogData({
@@ -80,7 +84,35 @@ const Dispatch = () => {
     });
   };
 
-  // NEW: Part name mapping
+  // Duplicate Serial Number Helper Functions
+  const checkDuplicateSerialNumber = (serialNumber, partNumber) => {
+    const serialKey = `${partNumber}_${serialNumber}`;
+
+    if (scannedSerialNumbers.has(serialKey)) {
+      return {
+        isDuplicate: true,
+        message: `Serial number "${serialNumber}" has already been scanned for part "${partNumber}".\n\nThis part has already been processed in the current session.\n\nPlease scan a different part or check your inventory.`,
+      };
+    }
+
+    return {
+      isDuplicate: false,
+      message: "",
+    };
+  };
+
+  const addScannedSerialNumber = (serialNumber, partNumber) => {
+    const serialKey = `${partNumber}_${serialNumber}`;
+    setScannedSerialNumbers((prev) => new Set([...prev, serialKey]));
+    console.log(`Added scanned serial: ${serialKey}`);
+  };
+
+  const clearScannedSerialNumbers = () => {
+    setScannedSerialNumbers(new Set());
+    console.log("Cleared scanned serial numbers for new bin/invoice");
+  };
+
+  // Part name mapping
   const getPartNameByPartNo = (partNo) => {
     const partNameMapping = {
       "31100M52T03": "YTB/YED",
@@ -140,7 +172,7 @@ const Dispatch = () => {
     scannedQuantity: 0,
   });
 
-  // NEW: Bin tracking states
+  // Bin tracking states
   const [totalBinCount, setTotalBinCount] = useState(0);
   const [completedBinCount, setCompletedBinCount] = useState(0);
   const [invoiceProgress, setInvoiceProgress] = useState({
@@ -163,7 +195,7 @@ const Dispatch = () => {
   const machineBarcodeRef = useRef(null);
 
   // =============================================================================
-  // NEW: STATISTICS STORAGE FUNCTIONS
+  // STATISTICS STORAGE FUNCTIONS
   // =============================================================================
 
   // Function to save statistics data to backend
@@ -193,7 +225,6 @@ const Dispatch = () => {
         overallProgress: statisticsData.overallProgress,
         remainingBinQuantity: statisticsData.remainingBinQuantity,
         currentBinScannedQuantity: statisticsData.currentBinScannedQuantity,
-        // Add update metadata
         isRefresh: statisticsData.isRefresh || false,
         refreshTimestamp: statisticsData.refreshTimestamp,
         lastUpdated: statisticsData.lastUpdated,
@@ -201,36 +232,25 @@ const Dispatch = () => {
 
       if (response.data.success) {
         console.log("Statistics saved successfully:", response.data.data);
-
-        // Log the update type
-        if (statisticsData.isRefresh) {
-          console.log(
-            "Statistics refresh completed for invoice:",
-            statisticsData.invoiceNumber
-          );
-        }
-
         return response.data.data;
       } else {
         throw new Error(response.data.message || "Failed to save statistics");
       }
     } catch (error) {
       console.error("Error saving statistics:", error);
-
-      // Don't show error dialog for statistics saves to avoid disrupting workflow
       if (error.response?.status !== 409) {
         console.error(
           "Statistics save failed:",
           error.response?.data?.message || error.message
         );
       }
-
       return null;
     }
   };
 
-  // Function to collect current statistics data
+  // ENHANCED: Function to collect current statistics data with real-time calculations
   const collectStatisticsData = () => {
+    const originalQuantity = parseInt(invoicePartDetails.originalQuantity) || 0;
     const currentBinProgressPercent = binPartDetails.quantity
       ? Math.round((scannedQuantity / parseInt(binPartDetails.quantity)) * 100)
       : 0;
@@ -238,38 +258,39 @@ const Dispatch = () => {
     const overallProgressPercent =
       totalBinCount > 0
         ? Math.round((completedBinCount / totalBinCount) * 100)
+        : originalQuantity > 0
+        ? Math.round((scannedPartsCount / originalQuantity) * 100)
         : 0;
 
-    // Calculate real-time remaining quantity
-    const realTimeRemaining = Math.max(
-      0,
-      parseInt(invoicePartDetails.originalQuantity || 0) - scannedPartsCount
-    );
+    // Real-time calculation of remaining quantity
+    const realTimeRemaining = Math.max(0, originalQuantity - scannedPartsCount);
 
     return {
       invoiceNumber: selectedInvoiceNo,
-      invoiceRemaining: realTimeRemaining, // Use real-time calculation
+      invoiceRemaining: realTimeRemaining,
       binQuantity: parseInt(binPartDetails.originalQuantity) || 0,
       scannedPartCount: scannedPartsCount,
       binProgress:
         totalBinCount > 0
           ? `${completedBinCount}/${totalBinCount}`
-          : `${scannedQuantity}/${binPartDetails.quantity || 0}`,
+          : binPartDetails.quantity
+          ? `${scannedQuantity}/${binPartDetails.quantity}`
+          : "0/0",
       currentBinTag: currentBinTag,
       totalBinCount: totalBinCount,
       completedBinCount: completedBinCount,
       partNumber: invoicePartDetails.partNo,
       partName: invoicePartDetails.partName,
       status: status,
-      originalInvoiceQuantity:
-        parseInt(invoicePartDetails.originalQuantity) || 0,
+      originalInvoiceQuantity: originalQuantity,
       currentBinProgress: currentBinProgressPercent,
       overallProgress: overallProgressPercent,
       remainingBinQuantity: remainingBinQuantity,
       currentBinScannedQuantity: scannedQuantity,
-      // Add metadata for tracking
       lastUpdated: new Date().toISOString(),
       sessionId: sessionId,
+      statisticsTimestamp: Date.now(),
+      calculationMethod: "realtime",
     };
   };
 
@@ -280,7 +301,7 @@ const Dispatch = () => {
         const statisticsData = collectStatisticsData();
         await saveStatisticsData(statisticsData);
       }
-    }, 2000), // Wait 2 seconds after last change before saving
+    }, 2000),
     [
       selectedInvoiceNo,
       remainingTotalQuantity,
@@ -312,37 +333,69 @@ const Dispatch = () => {
     }
   };
 
+  // ENHANCED: Real-time statistics updates
   useEffect(() => {
-    if (selectedInvoiceNo && invoicePartDetails.partNo) {
-      // Recalculate and update statistics when key data changes
-      const currentStats = collectStatisticsData();
-
-      // Update remaining quantity in real-time
-      const newRemaining = Math.max(
-        0,
-        parseInt(invoicePartDetails.originalQuantity || 0) - scannedPartsCount
-      );
+    // Update remaining quantity whenever scanned parts count changes
+    if (invoicePartDetails.originalQuantity) {
+      const originalQty = parseInt(invoicePartDetails.originalQuantity);
+      const newRemaining = Math.max(0, originalQty - scannedPartsCount);
 
       if (newRemaining !== remainingTotalQuantity) {
+        console.log("Auto-updating remaining quantity:", {
+          original: originalQty,
+          scanned: scannedPartsCount,
+          newRemaining,
+          previousRemaining: remainingTotalQuantity,
+        });
         setRemainingTotalQuantity(newRemaining);
       }
     }
+  }, [scannedPartsCount, invoicePartDetails.originalQuantity]);
+
+  // ENHANCED: Progress synchronization
+  useEffect(() => {
+    // Sync invoice progress state with individual state variables
+    const shouldUpdate =
+      invoiceProgress.scannedQuantity !== scannedPartsCount ||
+      invoiceProgress.completedBins !== completedBinCount ||
+      invoiceProgress.totalBins !== totalBinCount;
+
+    if (shouldUpdate && invoicePartDetails.originalQuantity) {
+      const originalQty = parseInt(invoicePartDetails.originalQuantity);
+      const updatedProgress = {
+        totalQuantity: originalQty,
+        scannedQuantity: scannedPartsCount,
+        totalBins: totalBinCount,
+        completedBins: completedBinCount,
+        remainingQuantity: Math.max(0, originalQty - scannedPartsCount),
+        binSize: invoiceProgress.binSize,
+      };
+
+      console.log("Syncing invoice progress:", updatedProgress);
+      setInvoiceProgress(updatedProgress);
+    }
   }, [
-    selectedInvoiceNo,
-    invoicePartDetails,
     scannedPartsCount,
     completedBinCount,
+    totalBinCount,
+    invoicePartDetails.originalQuantity,
   ]);
 
-  // NEW: Manual refresh function that can be called externally
-  const manualRefreshStatistics = async () => {
-    if (selectedInvoiceNo) {
-      await refreshInvoiceStatistics(selectedInvoiceNo);
-      toast.success("Statistics manually refreshed!");
-    } else {
-      toast.error("No invoice selected to refresh");
-    }
-  };
+  // Auto-save statistics when data changes
+  useEffect(() => {
+    debouncedSaveStatistics();
+  }, [
+    selectedInvoiceNo,
+    remainingTotalQuantity,
+    binPartDetails.originalQuantity,
+    scannedPartsCount,
+    totalBinCount,
+    completedBinCount,
+    scannedQuantity,
+    status,
+    currentBinTag,
+    trackingRefresh,
+  ]);
 
   // Function to fetch saved statistics
   const fetchSavedStatistics = async (invoiceNumber) => {
@@ -354,8 +407,6 @@ const Dispatch = () => {
       if (response.data.success && response.data.data) {
         const stats = response.data.data;
         console.log("Fetched saved statistics:", stats);
-
-        toast.success(`Loaded saved statistics for invoice ${invoiceNumber}`);
         return stats;
       } else {
         return null;
@@ -368,27 +419,7 @@ const Dispatch = () => {
     }
   };
 
-  // Auto-save statistics when data changes
- useEffect(() => {
-   debouncedSaveStatistics();
- }, [
-   selectedInvoiceNo,
-   remainingTotalQuantity,
-   binPartDetails.originalQuantity,
-   scannedPartsCount,
-   totalBinCount,
-   completedBinCount,
-   scannedQuantity,
-   status,
-   currentBinTag,
-   trackingRefresh, // Add this to trigger updates when refresh is called
- ]);
-
-  // =============================================================================
-  // EXISTING FUNCTIONS (UPDATED WITH STATISTICS SAVING)
-  // =============================================================================
-
-  // NEW: Function to save invoice progress to backend
+  // Function to save invoice progress to backend
   const saveInvoiceProgress = async (progressData) => {
     try {
       const response = await api.post("/api/invoice-progress", {
@@ -422,7 +453,7 @@ const Dispatch = () => {
     }
   };
 
-  // NEW: Function to fetch saved invoice progress
+  // Function to fetch saved invoice progress
   const fetchInvoiceProgress = async (invoiceNumber) => {
     try {
       const response = await api.get(`/api/invoice-progress/${invoiceNumber}`);
@@ -444,9 +475,7 @@ const Dispatch = () => {
         setScannedPartsCount(progressData.scannedQuantity);
         setRemainingTotalQuantity(progressData.remainingQuantity);
 
-        toast.success(
-          `Resumed progress: ${progressData.completedBins}/${progressData.totalBins} bins completed`
-        );
+        console.log("Progress restored:", progressData);
         return progressData;
       } else {
         return null;
@@ -459,94 +488,211 @@ const Dispatch = () => {
     }
   };
 
-  // NEW: Function to calculate bin count and update progress
-  const calculateBinProgress = (totalQuantity, binSize, scannedParts = 0) => {
-    if (!totalQuantity || !binSize || totalQuantity <= 0 || binSize <= 0) {
-      return {
-        totalBins: 0,
-        completedBins: 0,
-        remainingQuantity: totalQuantity || 0,
-        progress: {
-          totalQuantity: totalQuantity || 0,
-          scannedQuantity: scannedParts,
-          totalBins: 0,
-          completedBins: 0,
-          remainingQuantity: totalQuantity || 0,
-          binSize: binSize || 0,
-        },
-      };
-    }
-
-    const totalBins = Math.ceil(totalQuantity / binSize);
-    const completedBins = Math.floor(scannedParts / binSize);
-    const remainingQuantity = Math.max(0, totalQuantity - scannedParts);
-
-    const progressData = {
+  // ENHANCED: Function to reset invoice progress
+  const resetInvoiceProgress = (totalQuantity = 0) => {
+    setInvoicePartDetails((prev) => ({
+      ...prev,
+      quantity: totalQuantity.toString(),
+      originalQuantity: totalQuantity.toString(),
+      packageCount: 0,
+    }));
+    setRemainingTotalQuantity(totalQuantity);
+    setScannedPartsCount(0);
+    setCompletedBinCount(0);
+    setTotalBinCount(0);
+    setInvoiceProgress({
       totalQuantity: totalQuantity,
-      scannedQuantity: scannedParts,
-      totalBins: totalBins,
-      completedBins: completedBins,
-      remainingQuantity: remainingQuantity,
-      binSize: binSize,
-    };
-
-    return {
-      totalBins,
-      completedBins,
-      remainingQuantity,
-      progress: progressData,
-    };
+      scannedQuantity: 0,
+      totalBins: 0,
+      completedBins: 0,
+      remainingQuantity: totalQuantity,
+      binSize: 0,
+    });
   };
 
-  // NEW: Function to update bin progress when a bin is completed
+  // ENHANCED: Function to update bin progress when a bin is completed
   const onBinCompleted = async () => {
+    const binQuantity = parseInt(binPartDetails.quantity) || 0;
     const newCompletedBins = completedBinCount + 1;
-    const newScannedParts =
-      scannedPartsCount + parseInt(binPartDetails.quantity);
+    const newScannedParts = scannedPartsCount + binQuantity;
+    const originalQuantity = parseInt(invoicePartDetails.originalQuantity) || 0;
+    const newRemaining = Math.max(0, originalQuantity - newScannedParts);
 
+    console.log("Bin completion - updating statistics:", {
+      binQuantity,
+      newCompletedBins,
+      newScannedParts,
+      originalQuantity,
+      newRemaining,
+      totalBinCount,
+    });
+
+    // Update all states atomically
     setCompletedBinCount(newCompletedBins);
     setScannedPartsCount(newScannedParts);
-
-    const remainingQty = Math.max(
-      0,
-      parseInt(invoicePartDetails.originalQuantity) - newScannedParts
-    );
-    setRemainingTotalQuantity(remainingQty);
+    setRemainingTotalQuantity(newRemaining);
 
     // Update invoice progress
     const updatedProgress = {
-      totalQuantity: parseInt(invoicePartDetails.originalQuantity),
+      totalQuantity: originalQuantity,
       scannedQuantity: newScannedParts,
       totalBins: totalBinCount,
       completedBins: newCompletedBins,
-      remainingQuantity: remainingQty,
-      binSize: parseInt(binPartDetails.quantity),
+      remainingQuantity: newRemaining,
+      binSize: binQuantity,
     };
-
     setInvoiceProgress(updatedProgress);
 
     // Save progress to backend
-    await saveInvoiceProgress(updatedProgress);
+    try {
+      await saveInvoiceProgress(updatedProgress);
+      console.log("Invoice progress saved successfully");
+    } catch (error) {
+      console.error("Failed to save invoice progress:", error);
+    }
 
-    // NEW: Save statistics after bin completion
-    await saveCurrentStatistics();
+    // Save statistics
+    try {
+      await saveCurrentStatistics();
+      console.log("Statistics saved after bin completion");
+    } catch (error) {
+      console.error("Failed to save statistics after bin completion:", error);
+    }
 
     // Check if all bins are completed
-    if (newCompletedBins >= totalBinCount) {
+    if (newCompletedBins >= totalBinCount && totalBinCount > 0) {
       toast.success(
         `🎉 Invoice ${selectedInvoiceNo} completed! All ${totalBinCount} bins processed successfully!`
       );
       setAllBinsCompletedDialogOpen(true);
     } else {
+      const progressPercent =
+        totalBinCount > 0
+          ? Math.round((newCompletedBins / totalBinCount) * 100)
+          : 0;
       toast.success(
-        `Bin completed! Progress: ${newCompletedBins}/${totalBinCount} bins (${Math.round(
-          (newCompletedBins / totalBinCount) * 100
-        )}%)`
+        `Bin completed! Progress: ${newCompletedBins}/${totalBinCount} bins (${progressPercent}%) | Parts: ${newScannedParts}/${originalQuantity}`
       );
     }
   };
 
-  // ENHANCED: Validation helper function
+  // ENHANCED: Fetch invoice details with proper progress restoration
+  const fetchInvoiceDetails = async (invoiceNumber) => {
+    try {
+      console.log(`Fetching details for invoice: ${invoiceNumber}`);
+
+      const response = await api.get(
+        `/api/scan/data/search?invoiceNumber=${invoiceNumber}`
+      );
+
+      if (response.data.success && response.data.data.length > 0) {
+        const invoiceData = response.data.data[0];
+        const originalQuantity = parseInt(invoiceData.quantity) || 0;
+        const partNo = invoiceData.partNumber || "";
+        const partName = getPartNameByPartNo(partNo);
+
+        // Set invoice details
+        setInvoicePartDetails({
+          partNo: partNo,
+          partName: partName,
+          quantity: originalQuantity.toString(),
+          originalQuantity: originalQuantity.toString(),
+          packageCount: 0,
+        });
+
+        // First, try to restore saved progress
+        console.log("Attempting to restore saved progress...");
+        const savedProgress = await fetchInvoiceProgress(invoiceNumber);
+        const savedStats = await fetchSavedStatistics(invoiceNumber);
+
+        if (savedProgress || savedStats) {
+          // Restore from saved data
+          const progressData = savedProgress || {};
+          const statsData = savedStats || {};
+
+          const restoredScannedParts =
+            progressData.scannedQuantity || statsData.scannedPartCount || 0;
+          const restoredCompletedBins =
+            progressData.completedBins || statsData.completedBinCount || 0;
+          const restoredTotalBins =
+            progressData.totalBins || statsData.totalBinCount || 0;
+          const restoredRemaining = Math.max(
+            0,
+            originalQuantity - restoredScannedParts
+          );
+
+          // Update all related states
+          setScannedPartsCount(restoredScannedParts);
+          setCompletedBinCount(restoredCompletedBins);
+          setTotalBinCount(restoredTotalBins);
+          setRemainingTotalQuantity(restoredRemaining);
+
+          setInvoiceProgress({
+            totalQuantity: originalQuantity,
+            scannedQuantity: restoredScannedParts,
+            totalBins: restoredTotalBins,
+            completedBins: restoredCompletedBins,
+            remainingQuantity: restoredRemaining,
+            binSize: progressData.binSize || 0,
+          });
+
+          console.log("Progress restored:", {
+            scannedParts: restoredScannedParts,
+            completedBins: restoredCompletedBins,
+            totalBins: restoredTotalBins,
+            remaining: restoredRemaining,
+          });
+
+          toast.success(
+            `Invoice ${invoiceNumber} restored! Progress: ${restoredCompletedBins}/${restoredTotalBins} bins, ${restoredScannedParts}/${originalQuantity} parts`
+          );
+        } else {
+          // No saved progress - start fresh
+          console.log("No saved progress found - starting fresh");
+          resetInvoiceProgress(originalQuantity);
+
+          toast.success(
+            `Invoice ${invoiceNumber} loaded! Part: ${partName} (${originalQuantity} total)`
+          );
+        }
+
+        // Fetch package count
+        if (partNo) {
+          await fetchPartPackageCount(partNo);
+        }
+
+        // Save/update statistics after loading
+        setTimeout(async () => {
+          await saveCurrentStatistics();
+        }, 500);
+      } else {
+        throw new Error("No data found for this invoice");
+      }
+    } catch (error) {
+      console.error("Error fetching invoice details:", error);
+      showErrorDialog(
+        "Failed to fetch invoice details: " +
+          (error.response?.data?.message || error.message),
+        "Invoice Details Error",
+        "error"
+      );
+
+      // Reset states on error
+      resetInvoiceProgress(0);
+    }
+  };
+
+  // Manual refresh function
+  const manualRefreshStatistics = async () => {
+    if (selectedInvoiceNo) {
+      await fetchInvoiceDetails(selectedInvoiceNo);
+      toast.success("Statistics manually refreshed!");
+    } else {
+      toast.error("No invoice selected to refresh");
+    }
+  };
+
+  // Validation helper function
   const validatePartNumberMatch = () => {
     const invoicePartNo = invoicePartDetails.partNo?.trim();
     const binPartNo = binPartDetails.partNo?.trim();
@@ -568,7 +714,7 @@ const Dispatch = () => {
     return { isValid: true, message: "Part numbers match" };
   };
 
-  // ENHANCED: Check if machine scanner should be disabled
+  // Check if machine scanner should be disabled
   const isMachineScannerDisabled = () => {
     return (
       !selectedInvoiceNo ||
@@ -578,7 +724,7 @@ const Dispatch = () => {
     );
   };
 
-  // ENHANCED: Get helper text for machine scanner
+  // Get helper text for machine scanner
   const getMachineScannerHelperText = () => {
     if (!selectedInvoiceNo) return "Select invoice first";
     if (!invoicePartDetails.partNo) return "Load invoice details first";
@@ -589,16 +735,9 @@ const Dispatch = () => {
     return "Ready to scan parts";
   };
 
-  // Simple function to store raw scan data - only the scanned data, nothing else
+  // Store raw scan data
   const storeRawScanData = async (rawData) => {
     try {
-      console.log("Storing raw scan data:", {
-        dataLength: rawData ? rawData.length : 0,
-        dataPreview: rawData
-          ? rawData.substring(0, 50) + (rawData.length > 50 ? "..." : "")
-          : "null",
-      });
-
       const response = await api.post("/api/raw-scans", {
         rawData: rawData,
         invoiceNumber: selectedInvoiceNo,
@@ -623,11 +762,9 @@ const Dispatch = () => {
     }
   };
 
-  // Function to save part scanning data (partno, shift, serialno, date)
+  // Function to save part scanning data
   const savePartScanData = async (scanData) => {
     try {
-      console.log("Saving part scan data to database:", scanData);
-
       const response = await api.post("/api/partScan", {
         partNumber: scanData.partNumber,
         shift: scanData.shift,
@@ -652,23 +789,19 @@ const Dispatch = () => {
       }
     } catch (error) {
       console.error("Error saving part scan data:", error);
-
       if (error.response?.status !== 409) {
         console.error(
           "Part scan storage error:",
           error.response?.data?.message || error.message
         );
       }
-
       throw error;
     }
   };
 
-  // Updated function to parse concatenated barcode format
+  // Parse concatenated barcode format
   const parseConcatenatedBarcode = (concatenatedText) => {
     try {
-      console.log("Parsing concatenated barcode:", concatenatedText);
-
       const cleanedText = concatenatedText.trim();
 
       if (cleanedText.length < 25) {
@@ -676,23 +809,16 @@ const Dispatch = () => {
       }
 
       let pos = 0;
-
       const vendorCode = cleanedText.substring(pos, pos + 4);
       pos += 4;
-
       const shift = cleanedText.substring(pos, pos + 1);
       pos += 1;
-
       const partNumber = cleanedText.substring(5, 16);
       pos = 16;
-
       const date = cleanedText.substring(pos, pos + 6);
       pos += 6;
-
       const remaining = cleanedText.substring(pos);
-
       const serial = remaining.slice(-4);
-
       const quantityPart = remaining.slice(0, -4);
       const quantity = quantityPart || "1";
 
@@ -716,25 +842,6 @@ const Dispatch = () => {
 
       const spacedFormat = `${vendorCode} ${shift} ${partNumber} ${date} ${quantity} ${serial}`;
 
-      console.log("Parsed concatenated barcode:", {
-        original: concatenatedText,
-        spaced: spacedFormat,
-        vendorCode,
-        shift,
-        partNumber,
-        date,
-        quantity,
-        serial,
-        positions: {
-          vendorCode: "0-3",
-          shift: "4",
-          partNumber: "5-15",
-          date: "16-21",
-          quantity: "22 to -4",
-          serial: "last 4",
-        },
-      });
-
       return {
         vendorCode,
         shift,
@@ -751,29 +858,17 @@ const Dispatch = () => {
     }
   };
 
-  // Enhanced function to extract part number from various barcode formats
+  // Extract part number from various barcode formats
   const extractPartNumberFromBarcode = (barcodeText) => {
     try {
-      console.log("Extracting part number from barcode:", barcodeText);
-      console.log("Barcode length:", barcodeText.length);
-
       const cleanedText = barcodeText.trim();
 
       // Method 1: Full spaced format parsing
       if (cleanedText.includes(" ")) {
         const parts = cleanedText.split(/\s+/);
-        console.log("Split parts:", parts);
-
         if (parts.length >= 3) {
           const partNumber = parts[2];
-          console.log("Extracted part number (spaced format):", partNumber);
-
           if (partNumber.length === 11) {
-            return partNumber;
-          } else {
-            console.log(
-              `Warning: Part number length is ${partNumber.length}, expected 11`
-            );
             return partNumber;
           }
         }
@@ -783,18 +878,8 @@ const Dispatch = () => {
       if (cleanedText.length >= 25 && /^[A-Z]\d{3}\d/.test(cleanedText)) {
         try {
           const partNumber = cleanedText.substring(5, 16);
-          console.log(
-            "Extracted part number (concatenated format - positions 5-15):",
-            partNumber
-          );
-          console.log("Part number length:", partNumber.length);
-
           if (partNumber.length === 11) {
             return partNumber;
-          } else {
-            throw new Error(
-              `Part number length mismatch: got ${partNumber.length}, expected 11`
-            );
           }
         } catch (parseError) {
           console.log("Position-based extraction failed:", parseError.message);
@@ -811,87 +896,25 @@ const Dispatch = () => {
       for (let i = 0; i < patterns.length; i++) {
         const pattern = patterns[i];
         const matches = cleanedText.match(pattern);
-        console.log(`Pattern ${i + 1} matches:`, matches);
-
         if (matches) {
           for (const match of matches) {
             if (match && match.length === 11) {
-              console.log(`Extracted part number (pattern ${i + 1}):`, match);
               return match;
             }
           }
         }
       }
 
-      // Method 4: If we have a reference part number, try to find similar pattern
-      if (binPartDetails.partNo) {
-        const referencePattern = binPartDetails.partNo;
-        const referenceLength = referencePattern.length;
-
-        console.log(
-          "Using reference pattern:",
-          referencePattern,
-          "length:",
-          referenceLength
-        );
-
-        for (let i = 0; i <= cleanedText.length - referenceLength; i++) {
-          const candidate = cleanedText.substring(i, i + referenceLength);
-          if (candidate.length === referenceLength) {
-            console.log(`Checking candidate at position ${i}:`, candidate);
-
-            if (hasSimilarPattern(candidate, referencePattern)) {
-              console.log(`Found similar pattern:`, candidate);
-              return candidate;
-            }
-          }
-        }
-      }
-
-      // Method 5: Last resort - look for any 11-character sequence
-      const elevenCharMatches = cleanedText.match(/[A-Z0-9]{11}/gi);
-      if (elevenCharMatches && elevenCharMatches.length > 0) {
-        console.log("Found 11-character sequences:", elevenCharMatches);
-
-        for (const match of elevenCharMatches) {
-          if (/^\d/.test(match)) {
-            console.log(
-              "Using 11-character sequence starting with digit:",
-              match
-            );
-            return match;
-          }
-        }
-
-        console.log("Using first 11-character sequence:", elevenCharMatches[0]);
-        return elevenCharMatches[0];
-      }
-
       throw new Error(`Unable to extract part number from: ${cleanedText}`);
     } catch (error) {
       console.error("Part number extraction error:", error);
-      console.error("Full barcode was:", barcodeText);
       throw error;
     }
   };
 
-  // Helper function for pattern similarity
-  const hasSimilarPattern = (candidate, reference) => {
-    if (candidate.length !== reference.length) return false;
-
-    let matches = 0;
-    for (let i = 0; i < candidate.length; i++) {
-      if (candidate[i] === reference[i]) matches++;
-    }
-
-    return matches / candidate.length >= 0.7;
-  };
-
-  // Enhanced function to parse machine barcode data with better part number extraction
+  // Parse machine barcode data
   const parseMachineBarcode = (barcodeText) => {
     try {
-      console.log("Parsing Machine Barcode:", barcodeText);
-
       const cleanedText = barcodeText.trim();
 
       // Check if this is a concatenated format
@@ -902,9 +925,7 @@ const Dispatch = () => {
       ) {
         try {
           const parsed = parseConcatenatedBarcode(cleanedText);
-          console.log("Successfully parsed concatenated barcode:", parsed);
-
-          const result = {
+          return {
             vendorCode: parsed.vendorCode,
             staticshift: parsed.shift,
             partNumber: parsed.partNumber,
@@ -917,9 +938,6 @@ const Dispatch = () => {
             binNumber: currentBinTag,
             timestamp: new Date().toISOString(),
           };
-
-          console.log("Parsed Machine Barcode Data (concatenated):", result);
-          return result;
         } catch (parseError) {
           console.log(
             "Concatenated parsing failed, trying other methods:",
@@ -945,7 +963,6 @@ const Dispatch = () => {
           shift = parts[1];
           date = parts[3];
           quantity = parseInt(parts[4]) || 1;
-
           if (parts.length > 5) {
             serialNo = parts.slice(5).join("");
           }
@@ -976,7 +993,7 @@ const Dispatch = () => {
               .padStart(4, "0");
       }
 
-      const result = {
+      return {
         vendorCode,
         staticshift: shift,
         partNumber,
@@ -988,9 +1005,6 @@ const Dispatch = () => {
         binNumber: currentBinTag,
         timestamp: new Date().toISOString(),
       };
-
-      console.log("Parsed Machine Barcode Data:", result);
-      return result;
     } catch (error) {
       console.error("Machine Barcode Parsing Error:", error);
       throw new Error(`Failed to parse machine barcode: ${error.message}`);
@@ -1021,258 +1035,304 @@ const Dispatch = () => {
       }
     } catch (error) {
       console.error("Error saving machine scan data:", error);
-
       if (error.response?.status === 409) {
         return error.response.data.data;
       }
-
-      console.error(
-        "Failed to save machine scan data:",
-        error.response?.data?.message || error.message
-      );
       throw error;
     }
   };
 
-  // Updated function to parse QR code data with specific invoice number extraction
+  // QR Code parsing functions
   const parseQRCodeData = (qrCodeText) => {
     try {
-      console.log("Parsing QR Code:", qrCodeText);
-
       const cleanedText = qrCodeText.trim();
+      const lines = cleanedText
+        .split(/\r?\n/)
+        .filter((line) => line.trim().length > 0);
 
-      const binNoMatch = cleanedText.match(/^(\d{13})/);
-      if (!binNoMatch) {
-        throw new Error(
-          "Could not find bin number (expected 13 digits at start)"
-        );
-      }
-      const binNo = binNoMatch[1];
-
-      let remainingText = cleanedText.substring(13).trim();
-
-      const partNoMatch = remainingText.match(/^[\s]*([A-Z0-9]{11})/);
-      if (!partNoMatch) {
-        throw new Error(
-          "Could not find part number (expected 11 characters after bin number)"
-        );
-      }
-      const partNumber = partNoMatch[1];
-
-      remainingText = remainingText.substring(partNoMatch[0].length).trim();
-
-      const quantityMatch = remainingText.match(/^(\d+)/);
-      if (!quantityMatch) {
-        throw new Error("Could not find quantity");
-      }
-      const quantity = parseInt(quantityMatch[1]);
-
-      remainingText = remainingText.substring(quantityMatch[0].length).trim();
-
-      let descriptionOrPartName = "";
-
-      const binRepeatIndex = remainingText.indexOf(binNo);
-      const datePattern = /\d{2}\/\d{2}\/\d{2}/;
-      const dateMatch = remainingText.match(datePattern);
-
-      let endIndex = remainingText.length;
-
-      if (binRepeatIndex > 0) {
-        endIndex = Math.min(endIndex, binRepeatIndex);
-      }
-      if (dateMatch && dateMatch.index > 0) {
-        endIndex = Math.min(endIndex, dateMatch.index);
-      }
-
-      descriptionOrPartName = remainingText.substring(0, endIndex).trim();
-
-      descriptionOrPartName = descriptionOrPartName.replace(/,$/, "").trim();
-
-      if (!descriptionOrPartName) {
-        throw new Error("Could not find description/part name");
-      }
-
-      remainingText = remainingText.substring(endIndex);
-
-      let date = "";
-      const allDateMatches = remainingText.match(/\d{2}\/\d{2}\/\d{2}/g);
-      if (allDateMatches && allDateMatches.length > 0) {
-        date = allDateMatches[0];
-      }
-
-      let invoiceNumber = "";
-
-      if (date) {
-        const dateIndex = remainingText.indexOf(date);
-        if (dateIndex !== -1) {
-          const afterDate = remainingText.substring(dateIndex + date.length);
-
-          const cleanAfterDate = afterDate.replace(/\s/g, "");
-
-          if (cleanAfterDate.length >= 10) {
-            invoiceNumber = cleanAfterDate.substring(0, 10);
-            console.log(
-              "Extracted 10-character invoice number after date:",
-              invoiceNumber
-            );
-          } else {
-            const invoiceMatch = cleanAfterDate.match(/^([A-Z0-9]{1,10})/);
-            if (invoiceMatch) {
-              invoiceNumber = invoiceMatch[1];
-              console.log("Extracted partial invoice number:", invoiceNumber);
-            }
-          }
+      // Try line-by-line parsing first
+      if (lines.length >= 4) {
+        try {
+          return parseQRByLines(lines, cleanedText);
+        } catch (lineParseError) {
+          console.log("Line-by-line parsing failed:", lineParseError.message);
         }
       }
 
-      if (!invoiceNumber) {
-        const fullPatternMatch = remainingText.match(
-          /\d{2}\/\d{2}\/\d{2}\s*([A-Z0-9]{10})/
-        );
-        if (fullPatternMatch) {
-          invoiceNumber = fullPatternMatch[1];
-          console.log(
-            "Extracted invoice number using full pattern:",
-            invoiceNumber
-          );
-        }
-      }
-
-      if (!invoiceNumber) {
-        invoiceNumber = selectedInvoiceNo || "UNKNOWN";
-        console.log(
-          "No invoice found using date pattern, using fallback:",
-          invoiceNumber
-        );
-      }
-
-      if (!binNo || binNo.length !== 13) {
-        throw new Error(`Invalid bin number: ${binNo}`);
-      }
-      if (!partNumber || partNumber.length !== 11) {
-        throw new Error(`Invalid part number: ${partNumber}`);
-      }
-      if (isNaN(quantity) || quantity <= 0) {
-        throw new Error(`Invalid quantity: ${quantity}`);
-      }
-      if (!descriptionOrPartName) {
-        throw new Error("Description/Part name is empty");
-      }
-
-      const result = {
-        binNo,
-        partNumber,
-        quantity,
-        descriptionOrPartName,
-        date: date || new Date().toLocaleDateString("en-GB"),
-        invoiceNumber,
-        rawQRData: qrCodeText,
-        timestamp: new Date().toISOString(),
-        sessionId: sessionId,
-      };
-
-      console.log("Parsed QR Data:", result);
-      return result;
-    } catch (error) {
-      console.error("Primary QR Parsing Error:", error);
-
+      // Try compressed format parsing
       try {
-        console.log("Trying alternative parsing method...");
-        return parseQRCodeDataAlternative(qrCodeText);
-      } catch (altError) {
-        console.error("Alternative QR Parsing Error:", altError);
-        throw new Error(`Failed to parse QR code: ${error.message}`);
-      }
-    }
-  };
-
-  // Alternative parsing approach
-  const parseQRCodeDataAlternative = (qrCodeText) => {
-    try {
-      console.log("Alternative parsing for QR Code:", qrCodeText);
-
-      const segments = qrCodeText.trim().split(/\s{2,}/);
-
-      if (segments.length < 4) {
-        throw new Error("Insufficient data segments in QR code");
-      }
-
-      const binNoMatch = segments[0].match(/(\d{13})/);
-      if (!binNoMatch) {
-        throw new Error("Could not find bin number in first segment");
-      }
-      const binNo = binNoMatch[1];
-
-      const partNumber = segments[1].trim();
-      if (partNumber.length !== 11) {
-        throw new Error(
-          `Part number length mismatch: expected 11, got ${partNumber.length}`
+        return parseQRCompressedFormat(cleanedText);
+      } catch (compressedParseError) {
+        console.log(
+          "Compressed format parsing failed:",
+          compressedParseError.message
         );
       }
 
-      const quantity = parseInt(segments[2].trim());
-      if (isNaN(quantity)) {
-        throw new Error(`Invalid quantity: ${segments[2]}`);
+      // Try regex-based extraction
+      try {
+        return parseQRWithRegex(cleanedText);
+      } catch (regexParseError) {
+        console.log("Regex parsing failed:", regexParseError.message);
       }
 
-      let descriptionOrPartName = segments[3];
-
-      descriptionOrPartName = descriptionOrPartName
-        .replace(/[,\s]+$/, "")
-        .trim();
-
-      const remainingText = segments.slice(4).join(" ");
-
-      const dateMatch = remainingText.match(/\d{2}\/\d{2}\/\d{2}/);
-      const date = dateMatch
-        ? dateMatch[0]
-        : new Date().toLocaleDateString("en-GB");
-
-      const invoiceMatches = remainingText.match(/[A-Z0-9]{10,}/g);
-      const invoiceNumber = invoiceMatches
-        ? invoiceMatches.reduce(
-            (longest, current) =>
-              current.length > longest.length ? current : longest,
-            ""
-          )
-        : selectedInvoiceNo || "UNKNOWN";
-
-      const result = {
-        binNo,
-        partNumber,
-        quantity,
-        descriptionOrPartName,
-        date,
-        invoiceNumber,
-        rawQRData: qrCodeText,
-        timestamp: new Date().toISOString(),
-        sessionId: sessionId,
-      };
-
-      console.log("Alternative parsed QR Data:", result);
-      return result;
+      throw new Error("All parsing methods failed");
     } catch (error) {
-      console.error("Alternative QR Parsing Error:", error);
-      throw new Error(
-        `Failed to parse QR code (alternative): ${error.message}`
-      );
+      console.error("QR Parsing Error:", error);
+      throw new Error(`Failed to parse QR code: ${error.message}`);
     }
   };
 
+  const parseQRByLines = (lines, originalText) => {
+    const binNoMatch = lines[0].trim().match(/(\d{13})/);
+    if (!binNoMatch) {
+      throw new Error(`Invalid bin number in line 1: ${lines[0]}`);
+    }
+    const binNo = binNoMatch[1];
+
+    let partNumber = lines[1].trim().replace(/\s+/g, "");
+    if (partNumber.length !== 11) {
+      const partMatch = lines[1].match(/([A-Z0-9]{11})/);
+      if (partMatch) {
+        partNumber = partMatch[1];
+      } else {
+        throw new Error(
+          `Invalid part number length: ${partNumber} (expected 11 characters)`
+        );
+      }
+    }
+
+    const quantityMatch = lines[2].trim().match(/(\d+)/);
+    if (!quantityMatch) {
+      throw new Error(`Invalid quantity in line 3: ${lines[2]}`);
+    }
+    const quantity = parseInt(quantityMatch[1]);
+
+    let descriptionOrPartName = lines[3].trim().replace(/,$/, "").trim();
+    if (!descriptionOrPartName) {
+      throw new Error("Description is empty");
+    }
+
+    let date = "";
+    let invoiceNumber = "";
+
+    for (let i = 4; i < lines.length; i++) {
+      const line = lines[i];
+      const dateMatch = line.match(/(\d{2}\/\d{2}\/\d{2})/);
+      if (dateMatch && !date) {
+        date = dateMatch[1];
+        const afterDate = line.substring(line.indexOf(date) + date.length);
+        const invoiceMatch = afterDate
+          .replace(/\s/g, "")
+          .match(/([A-Z0-9]{10})/);
+        if (invoiceMatch) {
+          invoiceNumber = invoiceMatch[1];
+        }
+        break;
+      }
+    }
+
+    if (!invoiceNumber) {
+      invoiceNumber = selectedInvoiceNo || "UNKNOWN";
+    }
+
+    return {
+      binNo,
+      partNumber,
+      quantity,
+      descriptionOrPartName,
+      date: date || new Date().toLocaleDateString("en-GB"),
+      invoiceNumber,
+      rawQRData: originalText,
+      timestamp: new Date().toISOString(),
+      sessionId: sessionId,
+    };
+  };
+
+  const parseQRCompressedFormat = (cleanedText) => {
+    const compressedText = cleanedText
+      .replace(/\r?\n/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const binNoMatch = compressedText.match(/^(\d{13})/);
+    if (!binNoMatch) {
+      throw new Error("Could not find bin number at start");
+    }
+    const binNo = binNoMatch[1];
+
+    let remainingText = compressedText.substring(13).trim();
+    const partNoMatch = remainingText.match(/^([A-Z0-9]{11})/);
+    if (!partNoMatch) {
+      throw new Error("Could not find part number after bin number");
+    }
+    const partNumber = partNoMatch[1];
+
+    remainingText = remainingText.substring(11).trim();
+    const quantityMatch = remainingText.match(/^(\d+)/);
+    if (!quantityMatch) {
+      throw new Error("Could not find quantity after part number");
+    }
+    const quantity = parseInt(quantityMatch[1]);
+
+    remainingText = remainingText.substring(quantityMatch[1].length).trim();
+
+    let descriptionOrPartName = "";
+    const binRepeatIndex = remainingText.indexOf(binNo);
+    const dateMatch = remainingText.match(/\d{2}\/\d{2}\/\d{2}/);
+
+    let endIndex = remainingText.length;
+    if (binRepeatIndex > 0) {
+      endIndex = Math.min(endIndex, binRepeatIndex);
+    }
+    if (dateMatch && dateMatch.index > 0) {
+      endIndex = Math.min(endIndex, dateMatch.index);
+    }
+
+    descriptionOrPartName = remainingText
+      .substring(0, endIndex)
+      .trim()
+      .replace(/,$/, "")
+      .trim();
+
+    if (!descriptionOrPartName) {
+      descriptionOrPartName = "MOTOR ASSY,STARTING";
+    }
+
+    let date = "";
+    let invoiceNumber = "";
+
+    if (dateMatch) {
+      date = dateMatch[0];
+      const afterDate = remainingText.substring(dateMatch.index + date.length);
+      const invoiceMatch = afterDate.replace(/\s/g, "").match(/([A-Z0-9]{10})/);
+      if (invoiceMatch) {
+        invoiceNumber = invoiceMatch[1];
+      }
+    }
+
+    if (!invoiceNumber) {
+      invoiceNumber = selectedInvoiceNo || "UNKNOWN";
+    }
+
+    return {
+      binNo,
+      partNumber,
+      quantity,
+      descriptionOrPartName,
+      date: date || new Date().toLocaleDateString("en-GB"),
+      invoiceNumber,
+      rawQRData: cleanedText,
+      timestamp: new Date().toISOString(),
+      sessionId: sessionId,
+    };
+  };
+
+  const parseQRWithRegex = (cleanedText) => {
+    const binNoMatch = cleanedText.match(/(\d{13})/);
+    if (!binNoMatch) {
+      throw new Error("Could not find 13-digit bin number");
+    }
+    const binNo = binNoMatch[1];
+
+    const partMatches = cleanedText.match(/([A-Z0-9]{11})/g);
+    if (!partMatches || partMatches.length === 0) {
+      throw new Error("Could not find 11-character part number");
+    }
+
+    let partNumber = "";
+    for (const match of partMatches) {
+      if (
+        match !== binNo.substring(0, 11) &&
+        match !== binNo.substring(2, 13)
+      ) {
+        partNumber = match;
+        break;
+      }
+    }
+
+    if (!partNumber) {
+      partNumber = partMatches[0];
+    }
+
+    const numberMatches = cleanedText.match(/\s(\d{1,3})\s/g);
+    let quantity = 4;
+
+    if (numberMatches) {
+      for (const match of numberMatches) {
+        const num = parseInt(match.trim());
+        if (num > 0 && num <= 100) {
+          quantity = num;
+          break;
+        }
+      }
+    }
+
+    let descriptionOrPartName = "MOTOR ASSY,STARTING";
+    const descriptionMatch = cleanedText.match(/MOTOR[^0-9]*/i);
+    if (descriptionMatch) {
+      descriptionOrPartName = descriptionMatch[0].trim();
+    }
+
+    const dateMatch = cleanedText.match(/(\d{2}\/\d{2}\/\d{2})/);
+    const date = dateMatch
+      ? dateMatch[1]
+      : new Date().toLocaleDateString("en-GB");
+
+    let invoiceNumber = selectedInvoiceNo || "UNKNOWN";
+    const invoiceMatches = cleanedText.match(/([A-Z0-9]{10})/g);
+    if (invoiceMatches) {
+      for (const match of invoiceMatches) {
+        if (
+          match !== binNo.substring(0, 10) &&
+          match !== partNumber.substring(0, 10)
+        ) {
+          invoiceNumber = match;
+          break;
+        }
+      }
+    }
+
+    return {
+      binNo,
+      partNumber,
+      quantity,
+      descriptionOrPartName,
+      date,
+      invoiceNumber,
+      rawQRData: cleanedText,
+      timestamp: new Date().toISOString(),
+      sessionId: sessionId,
+    };
+  };
+
+  // Save bin data to database with validation
   const saveBinDataToDatabase = async (parsedData) => {
     try {
-      // FRONTEND VALIDATION: Check invoice numbers match before saving to database
+      if (!parsedData || typeof parsedData !== "object") {
+        throw new Error("Invalid parsed data - not an object");
+      }
+
+      if (!parsedData.binNo || parsedData.binNo.length !== 13) {
+        throw new Error(`Invalid bin number: ${parsedData.binNo}`);
+      }
+
+      if (!parsedData.partNumber || parsedData.partNumber.length !== 11) {
+        throw new Error(`Invalid part number: ${parsedData.partNumber}`);
+      }
+
+      if (
+        !parsedData.quantity ||
+        isNaN(parsedData.quantity) ||
+        parsedData.quantity <= 0
+      ) {
+        throw new Error(`Invalid quantity: ${parsedData.quantity}`);
+      }
+
+      // Frontend validation
       const selectedInvoice = selectedInvoiceNo?.trim();
       const binInvoice = parsedData.invoiceNumber?.trim();
 
-      console.log("Frontend invoice validation:", {
-        selectedInvoice,
-        binInvoice,
-        selectedInvoicePartNo: invoicePartDetails.partNo,
-        binPartNo: parsedData.partNumber,
-      });
-
-      // Validate invoice numbers match
       if (!selectedInvoice) {
         const error = "No invoice selected. Please select an invoice first.";
         showErrorDialog(error, "Invoice Selection Required", "warning");
@@ -1313,9 +1373,6 @@ const Dispatch = () => {
         );
       }
 
-      // All validations passed - proceed with database save
-      console.log("✅ Frontend validation passed - saving to database");
-
       const response = await api.post("/api/bindata/qr", {
         qrCodeData: parsedData.rawQRData,
         invoiceNumber: selectedInvoiceNo,
@@ -1324,7 +1381,7 @@ const Dispatch = () => {
         binNumber: parsedData.binNo,
         partNumber: parsedData.partNumber,
         totalQuantity: parsedData.quantity,
-        // Add validation metadata
+        description: parsedData.descriptionOrPartName,
         validatedInvoiceMatch: true,
         validatedPartMatch: true,
         validationTimestamp: new Date().toISOString(),
@@ -1334,23 +1391,38 @@ const Dispatch = () => {
         toast.success(
           `✅ Bin validated and saved successfully!\nInvoice: ${selectedInvoice} | Part: ${selectedPartNo}`
         );
-        return response.data.data;
+        const savedData = response.data.data;
+
+        if (!savedData.quantity && parsedData.quantity) {
+          savedData.quantity = parsedData.quantity;
+        }
+        if (!savedData.partNumber && parsedData.partNumber) {
+          savedData.partNumber = parsedData.partNumber;
+        }
+        if (!savedData.binNo && parsedData.binNo) {
+          savedData.binNo = parsedData.binNo;
+        }
+
+        return savedData;
       } else {
         throw new Error(response.data.message || "Failed to save bin data");
       }
     } catch (error) {
       console.error("Error saving bin data:", error);
 
-      // Don't proceed if validation failed
       if (
         error.message.includes("mismatch") ||
         error.message.includes("validation failed")
       ) {
-        throw error; // Re-throw validation errors to prevent further processing
+        throw error;
       }
 
       if (error.response?.status === 409) {
-        return error.response.data.data;
+        const existingData = error.response.data.data;
+        if (existingData && !existingData.quantity && parsedData.quantity) {
+          existingData.quantity = parsedData.quantity;
+        }
+        return existingData;
       }
 
       if (error.response?.status === 400) {
@@ -1372,11 +1444,10 @@ const Dispatch = () => {
     }
   };
 
-  // Function to fetch existing bin data from database
+  // Fetch existing bin data
   const fetchExistingBinData = async (binNo) => {
     try {
       const response = await api.get(`/api/bindata/bin/${binNo}`);
-
       if (response.data.success) {
         return response.data.data;
       } else {
@@ -1387,17 +1458,11 @@ const Dispatch = () => {
         return null;
       }
       console.error("Error fetching bin data:", error);
-      showErrorDialog(
-        "Failed to fetch bin data: " +
-          (error.response?.data?.message || error.message),
-        "Data Fetch Error",
-        "error"
-      );
       throw error;
     }
   };
 
-  // Enhanced function to create package in database
+  // Create package in database
   const createPackageInDatabase = async (binNo) => {
     try {
       const response = await api.post("/api/bindata/create-package", {
@@ -1417,19 +1482,12 @@ const Dispatch = () => {
         toast.success("Package already exists for this bin");
         return error.response.data;
       }
-
       console.error("Error creating package:", error);
-      showErrorDialog(
-        "Failed to create package: " +
-          (error.response?.data?.message || error.message),
-        "Package Creation Error",
-        "error"
-      );
       throw error;
     }
   };
 
-  // Function to update scan progress in database
+  // Update scan progress
   const updateScanProgress = async (binNo, scannedCount, scanDetails = {}) => {
     try {
       const response = await api.post("/api/bindata/scan-progress", {
@@ -1452,17 +1510,11 @@ const Dispatch = () => {
       }
     } catch (error) {
       console.error("Error updating scan progress:", error);
-      showErrorDialog(
-        "Failed to update scan progress: " +
-          (error.response?.data?.message || error.message),
-        "Progress Update Error",
-        "error"
-      );
       throw error;
     }
   };
 
-  // Function to get package count for a part number
+  // Get package count for a part number
   const fetchPartPackageCount = async (partNo) => {
     try {
       if (!partNo) return;
@@ -1518,102 +1570,6 @@ const Dispatch = () => {
     }
   };
 
-  // UPDATED: Enhanced fetch invoice details with part name mapping
-  const fetchInvoiceDetails = async (invoiceNumber) => {
-    try {
-      const response = await api.get(
-        `/api/scan/data/search?invoiceNumber=${invoiceNumber}`
-      );
-
-      if (response.data.success && response.data.data.length > 0) {
-        const invoiceData = response.data.data[0];
-        const originalQuantity = parseInt(invoiceData.quantity) || 0;
-        const partNo = invoiceData.partNumber || "";
-        const partName = getPartNameByPartNo(partNo);
-
-        setInvoicePartDetails({
-          partNo: partNo,
-          partName: partName,
-          quantity: originalQuantity.toString(),
-          originalQuantity: originalQuantity.toString(),
-          packageCount: 0,
-        });
-
-        // Always try to fetch saved progress first
-        const savedProgress = await fetchInvoiceProgress(invoiceNumber);
-
-        if (savedProgress) {
-          // Restore from saved progress and update statistics
-          console.log("Restored progress from backend:", savedProgress);
-
-          // Update statistics with restored progress
-          setTimeout(async () => {
-            await saveCurrentStatistics();
-          }, 500);
-        } else {
-          // Calculate fresh progress
-          setRemainingTotalQuantity(originalQuantity);
-          setScannedPartsCount(0);
-          setCompletedBinCount(0);
-          setTotalBinCount(0);
-
-          setInvoiceProgress({
-            totalQuantity: originalQuantity,
-            scannedQuantity: 0,
-            totalBins: 0,
-            completedBins: 0,
-            remainingQuantity: originalQuantity,
-            binSize: 0,
-          });
-
-          // Save initial statistics
-          setTimeout(async () => {
-            await saveCurrentStatistics();
-          }, 500);
-        }
-
-        if (invoiceData.partNumber) {
-          await fetchPartPackageCount(invoiceData.partNumber);
-        }
-
-        toast.success(
-          `Invoice ${invoiceNumber} loaded successfully! Part: ${partName}`
-        );
-      } else {
-        throw new Error("No data found for this invoice");
-      }
-    } catch (error) {
-      console.error("Error fetching invoice details:", error);
-      showErrorDialog(
-        "Failed to fetch invoice details: " +
-          (error.response?.data?.message || error.message),
-        "Invoice Details Error",
-        "error"
-      );
-
-      // Reset all states
-      setInvoicePartDetails({
-        partNo: "",
-        partName: "",
-        quantity: "",
-        originalQuantity: "",
-        packageCount: 0,
-      });
-      setRemainingTotalQuantity(0);
-      setScannedPartsCount(0);
-      setCompletedBinCount(0);
-      setTotalBinCount(0);
-      setInvoiceProgress({
-        totalQuantity: 0,
-        scannedQuantity: 0,
-        totalBins: 0,
-        completedBins: 0,
-        remainingQuantity: 0,
-        binSize: 0,
-      });
-    }
-  };
-
   useEffect(() => {
     fetchInvoices();
   }, []);
@@ -1624,7 +1580,7 @@ const Dispatch = () => {
     }
   }, [binPartDetails.partNo]);
 
-  // Enhanced save package data function
+  // Save package data function
   const savePackageData = async () => {
     try {
       const packageResponse = await createPackageInDatabase(currentBinTag);
@@ -1633,9 +1589,7 @@ const Dispatch = () => {
         toast.success(
           `Package ${packageResponse.packageNo} created successfully`
         );
-
         await fetchPartPackageCount(binPartDetails.partNo);
-
         return packageResponse.data;
       }
     } catch (error) {
@@ -1649,7 +1603,7 @@ const Dispatch = () => {
     }
   };
 
-  // Function to update total counts in database (if needed for reporting)
+  // Update total counts
   const updateCounts = async () => {
     try {
       console.log("Current session counts:", {
@@ -1673,7 +1627,7 @@ const Dispatch = () => {
     setTotalPackageCount(0);
   }, []);
 
-  // Handle invoice change - simplified without operator dialog
+  // ENHANCED: Handle invoice change with proper state management
   const handleInvoiceChange = async (e) => {
     const value = e.target.value;
     const previousInvoice = selectedInvoiceNo;
@@ -1681,73 +1635,26 @@ const Dispatch = () => {
     setSelectedInvoiceNo(value);
 
     if (value) {
+      // Clear scanned serial numbers when switching invoices
+      clearScannedSerialNumbers();
+
       // Always fetch fresh invoice details and update statistics
       await fetchInvoiceDetails(value);
 
-      // If the same invoice is selected again, force refresh statistics
+      // If the same invoice is selected again, force refresh
       if (previousInvoice === value) {
         console.log(
           `Same invoice ${value} selected again - refreshing statistics`
         );
-
-        // Force refresh statistics after a short delay to ensure all states are updated
         setTimeout(async () => {
-          await refreshInvoiceStatistics(value);
+          await manualRefreshStatistics();
         }, 1000);
-
         toast.success(`Invoice ${value} statistics refreshed!`);
       }
     } else {
       resetAllStates();
     }
   };
-
-  const refreshInvoiceStatistics = async (invoiceNumber) => {
-    try {
-      console.log("Refreshing statistics for invoice:", invoiceNumber);
-
-      // Fetch the latest progress data
-      const latestProgress = await fetchInvoiceProgress(invoiceNumber);
-
-      // Recalculate current statistics data
-      const refreshedStatistics = collectStatisticsData();
-
-      // Force update statistics to backend
-      const result = await saveStatisticsData({
-        ...refreshedStatistics,
-        // Add refresh metadata
-        isRefresh: true,
-        refreshTimestamp: new Date().toISOString(),
-        previousSessionId: sessionId,
-      });
-
-      if (result) {
-        console.log("Statistics refreshed successfully:", result);
-
-        // Update local statistics display
-        updateStatisticsDisplay(refreshedStatistics);
-
-        toast.success("Statistics updated with latest data!");
-      }
-
-      return result;
-    } catch (error) {
-      console.error("Error refreshing statistics:", error);
-      toast.error("Failed to refresh statistics");
-      return null;
-    }
-  };
-
-  const updateStatisticsDisplay = (statisticsData) => {
-    // Force trigger a re-render of statistics by updating dependent states
-    setTrackingRefresh((prev) => prev + 1);
-
-    // Optionally trigger the debounced save again with fresh data
-    setTimeout(async () => {
-      await saveCurrentStatistics();
-    }, 100);
-  };
-
 
   // Reset all states function
   const resetAllStates = () => {
@@ -1779,8 +1686,6 @@ const Dispatch = () => {
     setCurrentBinTag("");
     setProgress(0);
     setRemainingBinQuantity(0);
-
-    // NEW: Reset bin tracking states
     setTotalBinCount(0);
     setCompletedBinCount(0);
     setInvoiceProgress({
@@ -1791,9 +1696,10 @@ const Dispatch = () => {
       remainingQuantity: 0,
       binSize: 0,
     });
+    clearScannedSerialNumbers();
   };
 
-  // ENHANCED: QR Code processing with strict validation and bin count calculation
+  // ENHANCED: QR Code processing with improved bin count calculation
   const handleScanQuantityChange = async (e) => {
     const value = e.target.value.trim();
     setScanQuantity(value);
@@ -1805,7 +1711,6 @@ const Dispatch = () => {
     const processQRCode = async (value) => {
       if (value && (value.includes("\n") || value.length > 50)) {
         try {
-          // ENHANCED: Validate invoice is selected
           if (!selectedInvoiceNo) {
             showErrorDialog(
               "Please select an invoice first!",
@@ -1816,7 +1721,6 @@ const Dispatch = () => {
             return;
           }
 
-          // ENHANCED: Validate invoice part number is loaded
           if (!invoicePartDetails.partNo) {
             showErrorDialog(
               "Invoice part number not loaded!",
@@ -1829,7 +1733,6 @@ const Dispatch = () => {
 
           const parsedData = parseQRCodeData(value);
 
-          // ENHANCED: Strict part number validation
           if (
             parsedData.partNumber.trim() !== invoicePartDetails.partNo.trim()
           ) {
@@ -1849,8 +1752,8 @@ const Dispatch = () => {
           }
 
           const existingBinData = await fetchExistingBinData(parsedData.binNo);
-
           let savedBinData;
+
           if (existingBinData) {
             savedBinData = existingBinData;
             toast.success(
@@ -1883,15 +1786,20 @@ const Dispatch = () => {
           setScannedQuantity(alreadyScanned);
           setProgress(Math.round((alreadyScanned / initialBinQuantity) * 100));
 
-          // NEW: Calculate and set bin count if not already set
-          if (
-            totalBinCount === 0 &&
-            invoicePartDetails.originalQuantity &&
-            initialBinQuantity
-          ) {
+          // Clear scanned serial numbers when switching to new bin
+          clearScannedSerialNumbers();
+
+          // ENHANCED: Calculate and set bin count if not already set
+          if (totalBinCount === 0 && invoicePartDetails.originalQuantity) {
             const totalQty = parseInt(invoicePartDetails.originalQuantity);
             const binSize = initialBinQuantity;
             const calculatedBinCount = Math.ceil(totalQty / binSize);
+
+            console.log("Calculating total bin count:", {
+              totalQty,
+              binSize,
+              calculatedBinCount,
+            });
 
             setTotalBinCount(calculatedBinCount);
 
@@ -1927,7 +1835,7 @@ const Dispatch = () => {
 
           setScanQuantity("");
 
-          // NEW: Save statistics after bin is loaded
+          // Save statistics after bin is loaded
           setTimeout(async () => {
             await saveCurrentStatistics();
           }, 500);
@@ -1959,7 +1867,7 @@ const Dispatch = () => {
     }, 300);
   };
 
-  // ENHANCED: Machine barcode processing with comprehensive validation
+  // Machine barcode processing
   const handleMachineBarcodeChange = async (e) => {
     const rawValue = e.target.value;
     setMachineBarcode(rawValue);
@@ -1975,7 +1883,7 @@ const Dispatch = () => {
     }, 100);
   };
 
-  // ENHANCED: Machine barcode processing with strict validation and bin completion logic
+  // ENHANCED: Machine barcode processing with comprehensive validation
   const processMachineBarcode = async (rawValue) => {
     const trimmedValue = rawValue.trim();
 
@@ -1983,7 +1891,7 @@ const Dispatch = () => {
       return;
     }
 
-    // NEW: Validate exactly 32 characters for spaced format barcode
+    // Validate spaced format barcode
     if (trimmedValue.includes(" ")) {
       if (trimmedValue.length !== 32) {
         const errorMessage = `Invalid barcode format! Expected exactly 32 characters, but got ${trimmedValue.length} characters.\n\nScanned: "${trimmedValue}"\nExpected format: "L012 3 31100M55T04 290725 2 4231" (32 chars)`;
@@ -1993,36 +1901,20 @@ const Dispatch = () => {
           "Barcode Format Validation Failed",
           "validation"
         );
-
-        console.error("Barcode validation failed:", {
-          expected: 32,
-          actual: trimmedValue.length,
-          scanned: trimmedValue,
-          expectedFormat: "L012 3 31100M55T04 290725 2 4231",
-        });
-
         setMachineBarcode("");
         setStatus("fail");
 
-        // Focus back to scanner after error
         setTimeout(() => {
           if (machineBarcodeRef.current) {
             machineBarcodeRef.current.focus();
           }
         }, 100);
 
-        return; // Stop processing - don't save to database
+        return;
       }
-
-      // Success message for correct format
-      console.log("✅ Barcode format validation passed:", {
-        length: trimmedValue.length,
-        format: "spaced",
-        data: trimmedValue,
-      });
     }
 
-    // ENHANCED: Validate invoice and part number matching
+    // Validate invoice and part number matching
     if (!selectedInvoiceNo || !invoicePartDetails.partNo) {
       showErrorDialog(
         "Please select an invoice and load invoice details first!",
@@ -2043,7 +1935,7 @@ const Dispatch = () => {
       return;
     }
 
-    // ENHANCED: Strict part number validation before processing
+    // Strict part number validation
     const validation = validatePartNumberMatch();
     if (!validation.isValid) {
       showErrorDialog(
@@ -2056,6 +1948,7 @@ const Dispatch = () => {
     }
 
     try {
+      // Store raw scan data
       try {
         await storeRawScanData(rawValue);
       } catch (rawStoreError) {
@@ -2076,7 +1969,7 @@ const Dispatch = () => {
           extractedPartNumber = trimmedValue;
         } else {
           showErrorDialog(
-            `Unable to extract part number from barcode`,
+            "Unable to extract part number from barcode",
             "Part Number Extraction Error",
             "error"
           );
@@ -2088,26 +1981,37 @@ const Dispatch = () => {
       try {
         parsedData = parseMachineBarcode(trimmedValue);
         extractedSerialNumber = parsedData.Serial_no;
-        console.log(
-          "Extracted serial number from parsed data:",
-          extractedSerialNumber
-        );
       } catch (parseError) {
-        console.log(
-          "Full parsing failed, trying to extract serial number manually"
-        );
-
         const serialMatch = trimmedValue.match(/(\d{4})$/);
         extractedSerialNumber = serialMatch
           ? serialMatch[1]
           : `AUTO_${Date.now()}`;
-        console.log(
-          "Fallback serial number extraction:",
-          extractedSerialNumber
-        );
       }
 
-      // ENHANCED: Triple validation - invoice, bin, and scanned part must all match
+      // Check for duplicate serial number
+      const duplicateCheck = checkDuplicateSerialNumber(
+        extractedSerialNumber,
+        extractedPartNumber
+      );
+      if (duplicateCheck.isDuplicate) {
+        showErrorDialog(
+          duplicateCheck.message,
+          "Duplicate Serial Number Detected",
+          "validation"
+        );
+        setMachineBarcode("");
+        setStatus("fail");
+
+        setTimeout(() => {
+          if (machineBarcodeRef.current) {
+            machineBarcodeRef.current.focus();
+          }
+        }, 100);
+
+        return;
+      }
+
+      // Triple validation - invoice, bin, and scanned part must all match
       const invoicePartNo = invoicePartDetails.partNo?.trim();
       const binPartNo = binPartDetails.partNo?.trim();
       const scannedPartNo = extractedPartNumber?.trim();
@@ -2173,6 +2077,9 @@ const Dispatch = () => {
 
         savePartScanData(partScanData).catch(console.error);
 
+        // Add the serial number to scanned list AFTER successful processing
+        addScannedSerialNumber(extractedSerialNumber, extractedPartNumber);
+
         setStatus("pass");
         const newScannedQuantity = scannedQuantity + 1;
         const totalBinQuantity = Number(binPartDetails.quantity);
@@ -2199,16 +2106,15 @@ const Dispatch = () => {
             progressResponse.isCompleted ||
             newScannedQuantity >= totalBinQuantity
           ) {
-            // NEW: Bin completed - trigger bin completion logic
+            // Bin completed - trigger bin completion logic
             await onBinCompleted();
-
             setStatus("✅ completed");
           } else {
             toast.success(
               `Part scanned! ${newScannedQuantity}/${totalBinQuantity} (${progressPercent}%)`
             );
 
-            // NEW: Save statistics after each scan
+            // Save statistics after each scan
             setTimeout(async () => {
               await saveCurrentStatistics();
             }, 100);
@@ -2222,7 +2128,7 @@ const Dispatch = () => {
           if (newScannedQuantity >= totalBinQuantity) {
             await onBinCompleted();
           } else {
-            // NEW: Save statistics after scan even if progress update fails
+            // Save statistics after scan even if progress update fails
             setTimeout(async () => {
               await saveCurrentStatistics();
             }, 100);
@@ -2258,7 +2164,10 @@ const Dispatch = () => {
           setScannedQuantity(0);
           setProgress(0);
 
-          // NEW: Save statistics after bin completion
+          // Clear scanned serial numbers for next bin
+          clearScannedSerialNumbers();
+
+          // Save statistics after bin completion
           setTimeout(async () => {
             await saveCurrentStatistics();
           }, 500);
@@ -2307,7 +2216,7 @@ const Dispatch = () => {
       setRemainingBinQuantity(parseInt(binPartDetails.originalQuantity) || 0);
       setProgress(0);
 
-      // NEW: Reset bin tracking
+      // Reset bin tracking
       setCompletedBinCount(0);
       setInvoiceProgress((prev) => ({
         ...prev,
@@ -2316,7 +2225,10 @@ const Dispatch = () => {
         remainingQuantity: prev.totalQuantity,
       }));
 
-      // NEW: Save statistics after reset
+      // Clear scanned serial numbers when resetting all counts
+      clearScannedSerialNumbers();
+
+      // Save statistics after reset
       setTimeout(async () => {
         await saveCurrentStatistics();
       }, 500);
@@ -2363,7 +2275,7 @@ const Dispatch = () => {
         }}
       />
 
-      {/* NEW: Centralized Error Dialog */}
+      {/* Error Dialog */}
       <Dialog
         open={errorDialogOpen}
         onClose={closeErrorDialog}
@@ -2521,7 +2433,7 @@ const Dispatch = () => {
         </DialogActions>
       </Dialog>
 
-      {/* NEW: All Bins Completed Dialog */}
+      {/* All Bins Completed Dialog */}
       <Dialog
         open={allBinsCompletedDialogOpen}
         onClose={() => setAllBinsCompletedDialogOpen(false)}
@@ -2926,20 +2838,6 @@ const Dispatch = () => {
         </DialogActions>
       </Dialog>
 
-      <style jsx global>{`
-        @keyframes pulse {
-          0% {
-            box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
-          }
-          70% {
-            box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
-          }
-          100% {
-            box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
-          }
-        }
-      `}</style>
-
       <Container maxWidth="xl" sx={{ flex: 1, overflow: "auto" }}>
         <Grid container spacing={isSmall ? 0.5 : 1} sx={{ height: "100%" }}>
           {/* Left Column - Input Forms */}
@@ -2971,6 +2869,17 @@ const Dispatch = () => {
                   <Typography variant="h6" color="primary">
                     Invoice Details
                   </Typography>
+                  {selectedInvoiceNo && (
+                    <Tooltip title="Refresh invoice statistics" arrow>
+                      <IconButton
+                        size="small"
+                        onClick={manualRefreshStatistics}
+                        sx={{ ml: 2 }}
+                      >
+                        <RefreshIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                 </Box>
                 <Grid container spacing={isSmall ? 1 : 2}>
                   <Grid item xs={12} sm={3}>
@@ -3005,7 +2914,6 @@ const Dispatch = () => {
                       InputProps={{ readOnly: true }}
                     />
                   </Grid>
-                  {/* NEW: Part Name Field */}
                   <Grid item xs={12} sm={3}>
                     <TextField
                       label="Part Name"
@@ -3028,7 +2936,7 @@ const Dispatch = () => {
                   </Grid>
                   <Grid item xs={12} sm={3}>
                     <TextField
-                      label="Remaining Quantity"
+                      label="Invoice Quantity"
                       value={remainingTotalQuantity}
                       fullWidth
                       size="small"
@@ -3266,11 +3174,20 @@ const Dispatch = () => {
                 >
                   Session ID: {sessionId}
                 </Typography>
+                {scannedSerialNumbers.size > 0 && (
+                  <Typography
+                    variant="caption"
+                    color="info.main"
+                    sx={{ mt: 0.5, display: "block", fontWeight: "bold" }}
+                  >
+                    Scanned Serials: {scannedSerialNumbers.size}
+                  </Typography>
+                )}
               </Paper>
             </Box>
           </Grid>
 
-          {/* Right Column - Statistics */}
+          {/* Right Column - ENHANCED Statistics */}
           <Grid item xs={12} md={4} sx={{ height: isSmall ? "auto" : "100%" }}>
             <Box
               sx={{
@@ -3280,7 +3197,7 @@ const Dispatch = () => {
                 height: "100%",
               }}
             >
-              {/* Statistics Cards */}
+              {/* ENHANCED Statistics Cards with Real-time Updates */}
               <Grid container spacing={isSmall ? 1 : 2}>
                 <Grid item xs={12} sm={6}>
                   <Paper sx={{ p: { xs: 1, sm: 1.5 }, textAlign: "center" }}>
@@ -3292,40 +3209,168 @@ const Dispatch = () => {
                     <Typography variant="body2" color="primary">
                       Invoice Remaining
                     </Typography>
-                    <Typography variant="h4">
+                    <Typography
+                      variant="h4"
+                      sx={{
+                        color:
+                          remainingTotalQuantity === 0
+                            ? "success.main"
+                            : "text.primary",
+                        fontWeight:
+                          remainingTotalQuantity === 0 ? "bold" : "normal",
+                      }}
+                    >
                       {remainingTotalQuantity || 0}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       Out of {invoicePartDetails.originalQuantity || 0}
                     </Typography>
+                    {/* Progress indicator */}
+                    {invoicePartDetails.originalQuantity > 0 && (
+                      <Box sx={{ mt: 1 }}>
+                        <LinearProgress
+                          variant="determinate"
+                          value={
+                            ((parseInt(invoicePartDetails.originalQuantity) -
+                              remainingTotalQuantity) /
+                              parseInt(invoicePartDetails.originalQuantity)) *
+                            100
+                          }
+                          sx={{
+                            height: 4,
+                            borderRadius: 2,
+                            bgcolor: "grey.200",
+                            "& .MuiLinearProgress-bar": {
+                              borderRadius: 2,
+                              bgcolor:
+                                remainingTotalQuantity === 0
+                                  ? "success.main"
+                                  : "primary.main",
+                            },
+                          }}
+                        />
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontSize: "0.7rem" }}
+                        >
+                          {Math.round(
+                            ((parseInt(invoicePartDetails.originalQuantity) -
+                              remainingTotalQuantity) /
+                              parseInt(invoicePartDetails.originalQuantity)) *
+                              100
+                          )}
+                          % Complete
+                        </Typography>
+                      </Box>
+                    )}
                   </Paper>
                 </Grid>
+
                 <Grid item xs={12} sm={6}>
                   <Paper sx={{ p: { xs: 1, sm: 1.5 }, textAlign: "center" }}>
                     <LocalShippingIcon color="primary" />
                     <Typography variant="body2" color="primary">
-                      Bin Quantity
+                      Current Bin Quantity
                     </Typography>
                     <Typography variant="h4">
                       {binPartDetails.originalQuantity || 0}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Current bin total quantity
+                      {currentBinTag
+                        ? `Bin: ${currentBinTag}`
+                        : "No bin selected"}
                     </Typography>
+                    {/* Current bin progress */}
+                    {binPartDetails.originalQuantity > 0 && (
+                      <Box sx={{ mt: 1 }}>
+                        <LinearProgress
+                          variant="determinate"
+                          value={progress}
+                          sx={{
+                            height: 4,
+                            borderRadius: 2,
+                            bgcolor: "grey.200",
+                            "& .MuiLinearProgress-bar": {
+                              borderRadius: 2,
+                              bgcolor:
+                                progress === 100
+                                  ? "success.main"
+                                  : "secondary.main",
+                            },
+                          }}
+                        />
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontSize: "0.7rem" }}
+                        >
+                          {scannedQuantity}/{binPartDetails.originalQuantity}{" "}
+                          Scanned
+                        </Typography>
+                      </Box>
+                    )}
                   </Paper>
                 </Grid>
+
                 <Grid item xs={12} sm={6}>
                   <Paper sx={{ p: { xs: 1, sm: 1.5 }, textAlign: "center" }}>
                     <BackpackIcon color="primary" />
                     <Typography variant="body2" color="primary">
-                      Scanned Parts Count
+                      Total Parts Scanned
                     </Typography>
-                    <Typography variant="h4">{scannedPartsCount}</Typography>
+                    <Typography
+                      variant="h4"
+                      sx={{
+                        color:
+                          scannedPartsCount > 0
+                            ? "success.main"
+                            : "text.primary",
+                      }}
+                    >
+                      {scannedPartsCount}
+                    </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Total parts scanned
+                      Across all bins
                     </Typography>
+                    {/* Real-time scanning rate */}
+                    {scannedPartsCount > 0 &&
+                      invoicePartDetails.originalQuantity > 0 && (
+                        <Box sx={{ mt: 1 }}>
+                          <LinearProgress
+                            variant="determinate"
+                            value={
+                              (scannedPartsCount /
+                                parseInt(invoicePartDetails.originalQuantity)) *
+                              100
+                            }
+                            sx={{
+                              height: 4,
+                              borderRadius: 2,
+                              bgcolor: "grey.200",
+                              "& .MuiLinearProgress-bar": {
+                                borderRadius: 2,
+                                bgcolor: "success.main",
+                              },
+                            }}
+                          />
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ fontSize: "0.7rem" }}
+                          >
+                            {Math.round(
+                              (scannedPartsCount /
+                                parseInt(invoicePartDetails.originalQuantity)) *
+                                100
+                            )}
+                            % of Invoice
+                          </Typography>
+                        </Box>
+                      )}
                   </Paper>
                 </Grid>
+
                 <Grid item xs={12} sm={6}>
                   <Paper sx={{ p: { xs: 1, sm: 1.5 }, textAlign: "center" }}>
                     <QrCodeScannerIcon color="secondary" />
@@ -3344,11 +3389,42 @@ const Dispatch = () => {
                         ? "Completed bins"
                         : "Current bin progress"}
                     </Typography>
+                    {/* Bin completion progress */}
+                    {totalBinCount > 0 && (
+                      <Box sx={{ mt: 1 }}>
+                        <LinearProgress
+                          variant="determinate"
+                          value={(completedBinCount / totalBinCount) * 100}
+                          sx={{
+                            height: 4,
+                            borderRadius: 2,
+                            bgcolor: "grey.200",
+                            "& .MuiLinearProgress-bar": {
+                              borderRadius: 2,
+                              bgcolor:
+                                completedBinCount >= totalBinCount
+                                  ? "success.main"
+                                  : "info.main",
+                            },
+                          }}
+                        />
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontSize: "0.7rem" }}
+                        >
+                          {Math.round(
+                            (completedBinCount / totalBinCount) * 100
+                          )}
+                          % Bins Complete
+                        </Typography>
+                      </Box>
+                    )}
                   </Paper>
                 </Grid>
               </Grid>
 
-              {/* Invoice Info */}
+              {/* ENHANCED Invoice Info with Real-time Updates */}
               {selectedInvoiceNo && (
                 <Paper sx={{ p: { xs: 1, sm: 1.5 }, flexShrink: 0 }}>
                   <Typography variant="body1" color="primary" gutterBottom>
@@ -3362,13 +3438,36 @@ const Dispatch = () => {
                       <strong>Part:</strong> {invoicePartDetails.partNo}
                     </Typography>
                     <Typography variant="caption" display="block">
+                      <strong>Part Name:</strong> {invoicePartDetails.partName}
+                    </Typography>
+                    <Typography variant="caption" display="block">
                       <strong>Total Qty:</strong>{" "}
                       {invoicePartDetails.originalQuantity}
                     </Typography>
-                    <Typography variant="caption" display="block">
+                    <Typography
+                      variant="caption"
+                      display="block"
+                      sx={{
+                        fontWeight: "bold",
+                        color:
+                          remainingTotalQuantity === 0
+                            ? "success.main"
+                            : "text.primary",
+                      }}
+                    >
                       <strong>Remaining:</strong> {remainingTotalQuantity}
                     </Typography>
-                    <Typography variant="caption" display="block">
+                    <Typography
+                      variant="caption"
+                      display="block"
+                      sx={{
+                        fontWeight: "bold",
+                        color:
+                          scannedPartsCount > 0
+                            ? "success.main"
+                            : "text.primary",
+                      }}
+                    >
                       <strong>Scanned:</strong> {scannedPartsCount}
                     </Typography>
                     {totalBinCount > 0 && (
@@ -3376,10 +3475,30 @@ const Dispatch = () => {
                         <Typography variant="caption" display="block">
                           <strong>Total Bins:</strong> {totalBinCount}
                         </Typography>
-                        <Typography variant="caption" display="block">
+                        <Typography
+                          variant="caption"
+                          display="block"
+                          sx={{
+                            fontWeight: "bold",
+                            color:
+                              completedBinCount > 0
+                                ? "success.main"
+                                : "text.primary",
+                          }}
+                        >
                           <strong>Completed Bins:</strong> {completedBinCount}
                         </Typography>
-                        <Typography variant="caption" display="block">
+                        <Typography
+                          variant="caption"
+                          display="block"
+                          sx={{
+                            fontWeight: "bold",
+                            color:
+                              completedBinCount >= totalBinCount
+                                ? "success.main"
+                                : "info.main",
+                          }}
+                        >
                           <strong>Progress:</strong>{" "}
                           {Math.round(
                             (completedBinCount / totalBinCount) * 100
@@ -3388,11 +3507,19 @@ const Dispatch = () => {
                         </Typography>
                       </>
                     )}
+                    {/* ENHANCED: Show efficiency metrics */}
+                    <Typography
+                      variant="caption"
+                      display="block"
+                      sx={{ mt: 1, color: "info.main" }}
+                    >
+                      <strong>Session:</strong> {sessionId.slice(-6)}
+                    </Typography>
                   </Box>
                 </Paper>
               )}
 
-              {/* Bin Progress Details */}
+              {/* ENHANCED Bin Progress Details with Real-time Updates */}
               {currentBinTag && (
                 <Paper sx={{ p: { xs: 1, sm: 1.5 }, flexShrink: 0 }}>
                   <Typography variant="body1" color="primary" gutterBottom>
@@ -3403,10 +3530,17 @@ const Dispatch = () => {
                       <strong>Bin:</strong> {currentBinTag}
                     </Typography>
                     <Typography variant="caption" display="block">
-                      <strong>Total Qty:</strong>
+                      <strong>Total Qty:</strong>{" "}
                       {binPartDetails.originalQuantity}
                     </Typography>
-                    <Typography variant="caption" display="block">
+                    <Typography
+                      variant="caption"
+                      display="block"
+                      sx={{
+                        fontWeight: "bold",
+                        color: progress === 100 ? "success.main" : "info.main",
+                      }}
+                    >
                       <strong>Progress:</strong> {scannedQuantity}/
                       {binPartDetails.quantity} ({progress}%)
                     </Typography>
@@ -3416,7 +3550,17 @@ const Dispatch = () => {
                           <strong>Bin #{completedBinCount + 1}</strong> of{" "}
                           {totalBinCount}
                         </Typography>
-                        <Typography variant="caption" display="block">
+                        <Typography
+                          variant="caption"
+                          display="block"
+                          sx={{
+                            fontWeight: "bold",
+                            color:
+                              completedBinCount >= totalBinCount
+                                ? "success.main"
+                                : "info.main",
+                          }}
+                        >
                           <strong>Overall Progress:</strong>{" "}
                           {Math.round(
                             (completedBinCount / totalBinCount) * 100
@@ -3425,6 +3569,30 @@ const Dispatch = () => {
                         </Typography>
                       </>
                     )}
+                    {scannedSerialNumbers.size > 0 && (
+                      <Typography
+                        variant="caption"
+                        display="block"
+                        sx={{ color: "#1976d2", fontWeight: "bold" }}
+                      >
+                        <strong>Unique Serials Scanned:</strong>{" "}
+                        {scannedSerialNumbers.size}
+                      </Typography>
+                    )}
+                    {/* ENHANCED: Show remaining for current bin */}
+                    <Typography
+                      variant="caption"
+                      display="block"
+                      sx={{
+                        color:
+                          remainingBinQuantity === 0
+                            ? "success.main"
+                            : "warning.main",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      <strong>Remaining in Bin:</strong> {remainingBinQuantity}
+                    </Typography>
                   </Box>
                   {totalBinCount > 0 && (
                     <Box sx={{ mt: 1.5 }}>
@@ -3449,6 +3617,46 @@ const Dispatch = () => {
                       </Typography>
                     </Box>
                   )}
+                </Paper>
+              )}
+
+              {/* ENHANCED: Real-time Performance Metrics */}
+              {selectedInvoiceNo && scannedPartsCount > 0 && (
+                <Paper sx={{ p: { xs: 1, sm: 1.5 }, flexShrink: 0 }}>
+                  <Typography variant="body1" color="primary" gutterBottom>
+                    📊 Performance Metrics
+                  </Typography>
+                  <Box sx={{ fontSize: "0.75rem" }}>
+                    <Typography variant="caption" display="block">
+                      <strong>Completion Rate:</strong>{" "}
+                      {Math.round(
+                        (scannedPartsCount /
+                          parseInt(invoicePartDetails.originalQuantity)) *
+                          100
+                      )}
+                      %
+                    </Typography>
+                    {totalBinCount > 0 && (
+                      <Typography variant="caption" display="block">
+                        <strong>Bin Efficiency:</strong>{" "}
+                        {Math.round((completedBinCount / totalBinCount) * 100)}%
+                      </Typography>
+                    )}
+                    <Typography variant="caption" display="block">
+                      <strong>Parts per Bin:</strong>{" "}
+                      {binPartDetails.originalQuantity || "N/A"}
+                    </Typography>
+                    {scannedSerialNumbers.size > 0 && (
+                      <Typography
+                        variant="caption"
+                        display="block"
+                        sx={{ color: "success.main" }}
+                      >
+                        <strong>Unique Serials:</strong>{" "}
+                        {scannedSerialNumbers.size}
+                      </Typography>
+                    )}
+                  </Box>
                 </Paper>
               )}
             </Box>

@@ -65,7 +65,6 @@ app.use(productionRoutes);
 const invoiceRoutes = require("./src/Route/InvoiceRoute");
 app.use(invoiceRoutes);
 
-
 const operatorLogin = require("./src/Route/OperatorRoute");
 app.use(operatorLogin);
 
@@ -78,6 +77,9 @@ app.use("/api/scan", barcodeRoutes);
 
 const binDetails = require("./src/Route/BinRoute");
 app.use("/api", binDetails);
+
+const invoiceProgress = require("./src/Route/invoiceProgressRoute");
+app.use("/api/invoice-progress", invoiceProgress);
 
 const rawScansRoutes = require("./src/Route/MachineRoute");
 app.use("/api/raw-scans", rawScansRoutes);
