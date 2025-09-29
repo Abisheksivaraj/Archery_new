@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { CSVLink } from "react-csv";
 import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
-import "jspdf-autotable";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { api } from "../apiConfig";
 
 const PackageTable = () => {
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 0,
@@ -40,6 +41,19 @@ const PackageTable = () => {
   // CSV data for export
   const [csvData, setCsvData] = useState([]);
 
+  // Get user from localStorage on component mount
+  useEffect(() => {
+    try {
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setCurrentUser(user);
+      }
+    } catch (err) {
+      console.error("Error reading user from localStorage:", err);
+    }
+  }, []);
+
   // Fetch packages data
   const fetchPackages = async () => {
     try {
@@ -70,18 +84,68 @@ const PackageTable = () => {
     }
   };
 
+  // Get serial numbers from parsedData
+  const getSerialNumbers = (pkg) => {
+    // First, check if pkg has serialNumbers array (from BinData model)
+    if (pkg.serialNumbers && Array.isArray(pkg.serialNumbers)) {
+      // Extract the serial property from each object in the array
+      return pkg.serialNumbers.map((item) => item.serial);
+    }
+
+    // Fallback to parsedData if serialNumbers doesn't exist
+    if (pkg.parsedData && pkg.parsedData.serialNo) {
+      // Check if serialNo is a string with comma-separated values
+      if (typeof pkg.parsedData.serialNo === "string") {
+        return pkg.parsedData.serialNo.split(",").map((s) => s.trim());
+      }
+      // If it's already an array
+      if (Array.isArray(pkg.parsedData.serialNo)) {
+        return pkg.parsedData.serialNo;
+      }
+      // If it's a single number
+      return [pkg.parsedData.serialNo.toString()];
+    }
+
+    // Return empty array if no serial numbers found
+    return [];
+  };
+
+  // Get scanned by name from localStorage or package data
+  const getScannedByName = (pkg) => {
+    // First check if package has scannedBy field
+    if (pkg.scannedBy) {
+      return pkg.scannedBy;
+    }
+    // Otherwise use current user from localStorage
+    if (currentUser) {
+      return (
+        currentUser.name ||
+        currentUser.username ||
+        currentUser.email ||
+        "Unknown"
+      );
+    }
+    return "Unknown";
+  };
+
   // Prepare CSV data
   const prepareCsvData = (data) => {
-    const csvFormattedData = data.map((pkg, index) => ({
-      "S.No.": getSerialNumber(index),
-      "Bin No": pkg.binNo,
-      "Invoice No": pkg.invoiceNumber,
-      "Part No": pkg.partNumber,
-      Date: formatDate(pkg.createdAt),
-      Quantity: pkg.quantity,
-      Status: pkg.status?.toUpperCase() || "UNKNOWN",
-      "Scanned At": formatDate(pkg.createdAt),
-    }));
+    const csvFormattedData = data.map((pkg, index) => {
+      const serialNumbers = getSerialNumbers(pkg);
+      return {
+        "S.No.": getSerialNumber(index),
+        "Bin No": pkg.binNo || pkg.parsedData?.binNo || "N/A",
+        "Serial Numbers":
+          serialNumbers.length > 0 ? serialNumbers.join(", ") : "No serials",
+        "Scanned By": getScannedByName(pkg),
+        "Invoice No": pkg.invoiceNumber,
+        "Part No": pkg.partNumber || pkg.parsedData?.partNo || "N/A",
+        Date: formatDate(pkg.createdAt),
+        Quantity: pkg.quantity || serialNumbers.length,
+        Status: pkg.status?.toUpperCase() || "UNKNOWN",
+        "Scanned At": formatDate(pkg.createdAt),
+      };
+    });
     setCsvData(csvFormattedData);
   };
 
@@ -160,12 +224,13 @@ const PackageTable = () => {
       printed: "bg-yellow-100 text-yellow-800 border border-yellow-200",
       shipped: "bg-green-100 text-green-800 border border-green-200",
       delivered: "bg-purple-100 text-purple-800 border border-purple-200",
+      success: "bg-green-100 text-green-800 border border-green-200",
     };
 
     return (
       <span
         className={`px-3 py-1 text-xs font-medium rounded-full ${
-          statusColors[status] ||
+          statusColors[status?.toLowerCase()] ||
           "bg-gray-100 text-gray-800 border border-gray-200"
         }`}
       >
@@ -174,45 +239,45 @@ const PackageTable = () => {
     );
   };
 
-  // Handle back navigation
-  const handleBack = () => {
-    // Replace with your actual navigation logic
-    window.history.back(); // or use your router's navigation method
-    // Example: navigate('/dispatch') if using react-router
-  };
-
   // Excel Export Function
   const handleExcelExport = () => {
-    const excelData = packages.map((pkg, index) => ({
-      "S.No.": getSerialNumber(index),
-      "Bin No": pkg.binNo,
-      "Invoice No": pkg.invoiceNumber,
-      "Part No": pkg.partNumber,
-      Date: formatDate(pkg.createdAt),
-      Quantity: pkg.quantity,
-      Status: pkg.status?.toUpperCase() || "UNKNOWN",
-      "Scanned At": formatDate(pkg.createdAt),
-    }));
+    const excelData = packages.map((pkg, index) => {
+      const serialNumbers = getSerialNumbers(pkg);
+      return {
+        "S.No.": getSerialNumber(index),
+        "Bin No": pkg.binNo || pkg.parsedData?.binNo || "N/A",
+        "Serial Numbers":
+          serialNumbers.length > 0 ? serialNumbers.join(", ") : "No serials",
+        "Scanned By": getScannedByName(pkg),
+        "Invoice No": pkg.invoiceNumber,
+        "Part No": pkg.partNumber || pkg.parsedData?.partNo || "N/A",
+        Date: formatDate(pkg.createdAt),
+        Quantity: pkg.quantity || serialNumbers.length,
+        Status: pkg.status?.toUpperCase() || "UNKNOWN",
+        "Scanned At": formatDate(pkg.createdAt),
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(excelData);
     const workbook = XLSX.utils.book_new();
 
     // Set column widths
     const columnWidths = [
-      { wch: 8 }, // S.No.
-      { wch: 12 }, // Bin No
-      { wch: 15 }, // Invoice No
-      { wch: 15 }, // Part No
-      { wch: 18 }, // Date
-      { wch: 10 }, // Quantity
-      { wch: 12 }, // Status
-      { wch: 18 }, // Scanned At
+      { wch: 8 },
+      { wch: 15 },
+      { wch: 30 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 18 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 18 },
     ];
     worksheet["!cols"] = columnWidths;
 
     XLSX.utils.book_append_sheet(workbook, worksheet, "Packages");
 
-    // Generate filename with current date
     const currentDate = new Date().toISOString().split("T")[0];
     const filename = `packages_export_${currentDate}.xlsx`;
 
@@ -221,100 +286,78 @@ const PackageTable = () => {
 
   // PDF Export Function
   const handlePdfExport = () => {
-    const doc = new jsPDF();
+    try {
+      const doc = new jsPDF("l", "mm", "a4"); // landscape, millimeters, A4
 
-    // Add title
-    doc.setFontSize(18);
-    doc.setTextColor(40);
-    doc.text("Package Export Report", 20, 20);
+      // Add title
+      doc.setFontSize(18);
+      doc.text("Bin Data Export Report", 15, 15);
 
-    // Add export date
-    doc.setFontSize(11);
-    doc.setTextColor(100);
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 30);
-
-    // Add search criteria if any
-    if (appliedSearch.field && appliedSearch.value) {
-      doc.text(
-        `Search: ${appliedSearch.field} = "${appliedSearch.value}"`,
-        20,
-        37
-      );
-    }
-
-    // Prepare table data
-    const tableColumns = [
-      "S.No.",
-      "Bin No",
-      "Invoice No",
-      "Part No",
-      "Date",
-      "Quantity",
-      "Status",
-    ];
-
-    const tableRows = packages.map((pkg, index) => [
-      getSerialNumber(index),
-      pkg.binNo,
-      pkg.invoiceNumber,
-      pkg.partNumber,
-      formatDate(pkg.createdAt),
-      pkg.quantity,
-      pkg.status?.toUpperCase() || "UNKNOWN",
-    ]);
-
-    // Add the table
-    doc.autoTable({
-      head: [tableColumns],
-      body: tableRows,
-      startY: appliedSearch.field && appliedSearch.value ? 45 : 38,
-      styles: {
-        fontSize: 8,
-        cellPadding: 2,
-      },
-      headStyles: {
-        fillColor: [59, 130, 246], // Blue color
-        textColor: 255,
-        fontStyle: "bold",
-      },
-      alternateRowStyles: {
-        fillColor: [249, 250, 251], // Light gray
-      },
-      tableWidth: "auto",
-      margin: { horizontal: 10 },
-    });
-
-    // Add footer with page numbers
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
       doc.setFontSize(10);
-      doc.setTextColor(150);
-      doc.text(
-        `Page ${i} of ${pageCount}`,
-        doc.internal.pageSize.width - 30,
-        doc.internal.pageSize.height - 10
-      );
+      doc.text(`Date: ${new Date().toLocaleDateString()}`, 15, 22);
+      doc.text(`Total Records: ${packages.length}`, 15, 27);
+
+      // Prepare the table body
+      const body = packages.map((pkg, index) => {
+        const serials = getSerialNumbers(pkg);
+        return [
+          (index + 1).toString(),
+          pkg.binNo || "N/A",
+          serials.join(", ") || "No serials",
+          getScannedByName(pkg),
+          pkg.invoiceNumber || "N/A",
+          pkg.partNumber || "N/A",
+          new Date(pkg.createdAt).toLocaleDateString("en-GB"),
+          (pkg.quantity || serials.length).toString(),
+          pkg.status?.toUpperCase() || "PENDING",
+        ];
+      });
+
+      // Generate the table using autoTable function
+      autoTable(doc, {
+        head: [
+          [
+            "#",
+            "Bin",
+            "Serials",
+            "Scanned By",
+            "Invoice",
+            "Part",
+            "Date",
+            "Qty",
+            "Status",
+          ],
+        ],
+        body: body,
+        startY: 32,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [41, 128, 185] },
+      });
+
+      // Save
+      doc.save(`bin_data_${Date.now()}.pdf`);
+
+      alert("PDF exported successfully!");
+    } catch (error) {
+      console.error("PDF Export Error:", error);
+      alert("Failed to export PDF. Check console for details.");
     }
-
-    // Generate filename with current date
-    const currentDate = new Date().toISOString().split("T")[0];
-    const filename = `packages_export_${currentDate}.pdf`;
-
-    doc.save(filename);
   };
 
   // Handle export functions
   const handleExport = (format) => {
+    console.log("Export format:", format);
     switch (format) {
       case "excel":
+        console.log("Calling Excel export");
         handleExcelExport();
         break;
       case "pdf":
+        console.log("Calling PDF export");
         handlePdfExport();
         break;
       default:
-        console.log(`Exporting as ${format}`);
+        console.log(`Unknown format: ${format}`);
     }
   };
 
@@ -399,7 +442,6 @@ const PackageTable = () => {
 
           {/* Export Buttons */}
           <div className="flex items-center space-x-3">
-            {/* CSV Export using react-csv */}
             <CSVLink
               data={csvData}
               filename={`packages_export_${
@@ -486,6 +528,12 @@ const PackageTable = () => {
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-sm font-medium">
+                    Serial Numbers
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm font-medium">
+                    Scanned By
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm font-medium">
                     Invoice No
                   </th>
                   <th className="px-4 py-3 text-left text-sm font-medium">
@@ -525,7 +573,7 @@ const PackageTable = () => {
                 {packages.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="8"
+                      colSpan="10"
                       className="px-4 py-12 text-center text-gray-500"
                     >
                       <div className="flex flex-col items-center space-y-2">
@@ -550,37 +598,69 @@ const PackageTable = () => {
                     </td>
                   </tr>
                 ) : (
-                  packages.map((pkg, index) => (
-                    <tr
-                      key={pkg._id}
-                      className="hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                        {getSerialNumber(index)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-700 font-medium">
-                        {pkg.binNo}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-blue-600 font-medium">
-                        {pkg.invoiceNumber}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {pkg.partNumber}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {formatDate(pkg.createdAt)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 font-medium">
-                        {pkg.quantity}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {getStatusBadge(pkg.status)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {formatDate(pkg.createdAt)}
-                      </td>
-                    </tr>
-                  ))
+                  packages.map((pkg, index) => {
+                    const serialNumbers = getSerialNumbers(pkg);
+                    const scannedBy = getScannedByName(pkg);
+                    const binNo = pkg.binNo || pkg.parsedData?.binNo || "N/A";
+
+                    return (
+                      <tr
+                        key={pkg._id}
+                        className="hover:bg-gray-50 transition-colors"
+                      >
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          {getSerialNumber(index)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700 font-medium">
+                          {binNo}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          <div className="flex flex-wrap gap-1 max-w-xs">
+                            {serialNumbers.length > 0 ? (
+                              serialNumbers.map((serial, idx) => (
+                                <span
+                                  key={idx}
+                                  className="inline-block bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs font-mono border border-blue-200"
+                                >
+                                  {serial}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-gray-400 italic text-xs">
+                                No serials
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          <div className="flex items-center space-x-2">
+                            <span className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-medium">
+                              {scannedBy.charAt(0).toUpperCase()}
+                            </span>
+                            <span className="font-medium">{scannedBy}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-blue-600 font-medium">
+                          {pkg.invoiceNumber}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {pkg.partNumber || pkg.parsedData?.partNo || "N/A"}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {formatDate(pkg.createdAt)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 font-medium">
+                          {pkg.quantity || serialNumbers.length}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {getStatusBadge(pkg.status || pkg.parseStatus)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {formatDate(pkg.createdAt)}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -625,8 +705,7 @@ const PackageTable = () => {
 
                 <div className="flex items-center space-x-2">
                   <span className="text-sm text-gray-700">
-                    {pagination.currentPage}-{pagination.currentPage} of{" "}
-                    {pagination.totalPages}
+                    Page {pagination.currentPage} of {pagination.totalPages}
                   </span>
                   <button
                     onClick={() => handlePageChange(1)}

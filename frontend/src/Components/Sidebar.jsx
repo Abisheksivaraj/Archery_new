@@ -244,7 +244,7 @@ const useUserInfo = () => {
       return `Operator Id: ${user.operatorId}`;
     }
     // For other user types, you might want to display username or name
-    return user?.username || user?.name || "User";
+    return user?.role || user?.role || "Admin";
   };
 
   return { getUserInfo, getOperatorId, getUserRole, getUserDisplayName };

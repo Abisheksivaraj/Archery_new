@@ -195,5 +195,6 @@ rawScanSchema.index({ "parsedData.partNo": 1 });
 rawScanSchema.index({ "parsedData.date": 1 });
 rawScanSchema.index({ "parsedData.shift": 1 });
 rawScanSchema.index({ parseStatus: 1 });
+rawScanSchema.index({ partNumber: 1, serialNumber: 1 });
 
 module.exports = mongoose.model("RawScanData", rawScanSchema);

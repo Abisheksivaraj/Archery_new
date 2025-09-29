@@ -423,10 +423,19 @@ router.get("/bindata/bin/:binNo", async (req, res) => {
 
 
 // Route to update scan progress with sequence counter (POST) - FIXED
+// Route to update scan progress with serial number tracking (POST)
 router.post("/bindata/scan-progress", async (req, res) => {
   try {
-    const { binNo, scannedQuantity, scannedBy, isValid, mismatchReason } =
-      req.body;
+    const {
+      binNo,
+      scannedQuantity,
+      scannedBy,
+      isValid,
+      mismatchReason,
+      serialNumber,
+      rawBarcodeData,
+      machineData,
+    } = req.body;
 
     if (!binNo || scannedQuantity === undefined) {
       return res.status(400).json({
@@ -444,30 +453,41 @@ router.post("/bindata/scan-progress", async (req, res) => {
       });
     }
 
-    // Initialize scanSequence if it doesn't exist
-    if (!binData.scanSequence) {
-      binData.scanSequence = 0;
-    }
-
-    // Initialize scannedQuantity if it doesn't exist
-    if (!binData.scannedQuantity) {
-      binData.scannedQuantity = 0;
-    }
+    // Initialize fields if they don't exist
+    if (!binData.scanSequence) binData.scanSequence = 0;
+    if (!binData.scannedQuantity) binData.scannedQuantity = 0;
 
     // Increment scan sequence
     binData.scanSequence += 1;
 
-    // Update scanned quantity (this could be cumulative or the latest scan)
+    // Update scanned quantity
     binData.scannedQuantity = scannedQuantity;
+
+    // Add serial number if provided
+    if (serialNumber) {
+      const added = binData.addSerialNumber(
+        serialNumber,
+        scannedBy,
+        rawBarcodeData || machineData?.rawBarcodeData
+      );
+
+      if (!added) {
+        return res.status(400).json({
+          success: false,
+          message: "Serial number already exists in this bin",
+          serialNumber: serialNumber,
+        });
+      }
+    }
 
     // Update scan metadata
     binData.lastScannedAt = new Date();
-    binData.scannedBy = scannedBy || "system";
-    
+    binData.scannedBy = scannedBy;
+
     if (isValid !== undefined) {
       binData.isValid = isValid;
     }
-    
+
     if (mismatchReason) {
       binData.mismatchReason = mismatchReason;
     }
@@ -479,12 +499,12 @@ router.post("/bindata/scan-progress", async (req, res) => {
     );
     binData.completionPercentage = completionPercentage;
 
-    // Update status based on completion - FIXED: Use correct enum values
+    // Update status
     if (completionPercentage >= 100) {
       binData.status = "completed";
       binData.completedAt = new Date();
     } else if (completionPercentage > 0) {
-      binData.status = "in_progress"; // FIXED: Changed from "in-progress" to "in_progress"
+      binData.status = "in_progress";
     }
 
     // Save the updated bin data
@@ -502,15 +522,102 @@ router.post("/bindata/scan-progress", async (req, res) => {
         status: updatedBinData.status,
         lastScannedAt: updatedBinData.lastScannedAt,
         scannedBy: updatedBinData.scannedBy,
+        lastScannedSerial: updatedBinData.lastScannedSerial,
+        totalSerials: updatedBinData.serialNumbers.length,
         isValid: updatedBinData.isValid,
-        mismatchReason: updatedBinData.mismatchReason
+        mismatchReason: updatedBinData.mismatchReason,
       },
       isCompleted: updatedBinData.status === "completed",
       completionPercentage: updatedBinData.completionPercentage,
-      scanCount: updatedBinData.scanSequence
+      scanCount: updatedBinData.scanSequence,
     });
   } catch (error) {
     console.error("Scan progress update error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+});
+
+
+// Route to get all serial numbers for a specific bin (GET)
+router.get("/bindata/serials/:binNo", async (req, res) => {
+  try {
+    const { binNo } = req.params;
+
+    const binData = await BinData.findOne({ binNo });
+
+    if (!binData) {
+      return res.status(404).json({
+        success: false,
+        message: "Bin data not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Serial numbers retrieved successfully",
+      data: {
+        binNo: binData.binNo,
+        partNumber: binData.partNumber,
+        totalQuantity: binData.quantity,
+        scannedQuantity: binData.scannedQuantity,
+        serialNumbers: binData.serialNumbers,
+        totalSerials: binData.serialNumbers.length,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching serial numbers:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+});
+
+// Route to get serial numbers across all bins for an invoice
+router.get("/bindata/invoice-serials/:invoiceNumber", async (req, res) => {
+  try {
+    const { invoiceNumber } = req.params;
+
+    const bins = await BinData.find({ invoiceNumber });
+
+    if (!bins || bins.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No bins found for this invoice",
+      });
+    }
+
+    const serialData = bins.map((bin) => ({
+      binNo: bin.binNo,
+      partNumber: bin.partNumber,
+      quantity: bin.quantity,
+      scannedQuantity: bin.scannedQuantity,
+      serialNumbers: bin.serialNumbers,
+      totalSerials: bin.serialNumbers.length,
+    }));
+
+    const totalSerials = bins.reduce(
+      (sum, bin) => sum + bin.serialNumbers.length,
+      0
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Serial numbers retrieved successfully",
+      data: {
+        invoiceNumber: invoiceNumber,
+        totalBins: bins.length,
+        totalSerials: totalSerials,
+        bins: serialData,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching invoice serials:", error);
     res.status(500).json({
       success: false,
       message: "Internal server error",

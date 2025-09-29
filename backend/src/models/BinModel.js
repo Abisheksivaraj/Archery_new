@@ -1,7 +1,4 @@
-// models/BinData.js - Enhanced version with all required fields
 const mongoose = require("mongoose");
-
-// Main bin data schema (updated with all scan tracking fields)
 const binDataSchema = new mongoose.Schema(
   {
     binNo: {
@@ -47,15 +44,42 @@ const binDataSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    // CORRECTED: Array to track all scanned serial numbers for this bin
+    serialNumbers: {
+      type: [
+        {
+          serial: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+          scannedAt: {
+            type: Date,
+            default: Date.now,
+          },
+          scannedBy: {
+            type: String,
+            trim: true,
+          },
+          scanSequence: {
+            type: Number,
+          },
+          rawBarcodeData: {
+            type: String,
+            trim: true,
+          },
+        },
+      ],
+      default: [],
+    },
     status: {
       type: String,
-      enum: ["pending", "in_progress", "completed"], // Note: using "in_progress" with underscore
+      enum: ["pending", "in_progress", "completed"],
       default: "pending",
     },
     completedAt: {
       type: Date,
     },
-    // NEW FIELDS for scan sequence tracking
     scanSequence: {
       type: Number,
       default: 0,
@@ -64,6 +88,11 @@ const binDataSchema = new mongoose.Schema(
     lastScannedAt: {
       type: Date,
       default: null,
+    },
+    lastScannedSerial: {
+      type: String,
+      default: null,
+      trim: true,
     },
     scannedBy: {
       type: String,
@@ -92,7 +121,33 @@ const binDataSchema = new mongoose.Schema(
   }
 );
 
-// Schema for individual scan events (keeping this for historical tracking if needed)
+
+binDataSchema.methods.hasSerialNumber = function (serialNumber) {
+  return this.serialNumbers.some(
+    (item) => item.serial.trim() === serialNumber.trim()
+  );
+};
+
+binDataSchema.methods.addSerialNumber = function (
+  serialNumber,
+  scannedBy = null,
+  rawBarcodeData = null
+) {
+  if (!this.hasSerialNumber(serialNumber)) {
+    this.serialNumbers.push({
+      serial: serialNumber,
+      scannedAt: new Date(),
+      scannedBy: scannedBy,
+      scanSequence: this.scanSequence + 1,
+      rawBarcodeData: rawBarcodeData,
+    });
+    this.lastScannedSerial = serialNumber;
+    return true;
+  }
+  return false;
+};
+
+// Schema for individual scan events (updated with serial number)
 const scanEventSchema = new mongoose.Schema(
   {
     binNo: {
@@ -105,6 +160,14 @@ const scanEventSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      index: true,
+    },
+    // NEW: Serial number for this specific scan
+    serialNumber: {
+      type: String,
+      required: true,
+      trim: true,
+      index: true,
     },
     scanTimestamp: {
       type: Date,
@@ -127,6 +190,15 @@ const scanEventSchema = new mongoose.Schema(
     mismatchReason: {
       type: String,
       trim: true,
+    },
+    rawBarcodeData: {
+      type: String,
+      trim: true,
+    },
+    invoiceNumber: {
+      type: String,
+      trim: true,
+      index: true,
     },
   },
   {
@@ -194,24 +266,52 @@ binDataSchema.index({ partNumber: 1 });
 binDataSchema.index({ status: 1 });
 binDataSchema.index({ createdAt: -1 });
 binDataSchema.index({ lastScannedAt: -1 });
+binDataSchema.index({ "serialNumbers.serial": 1 }); // NEW: Index for serial lookup
 
 scanEventSchema.index({ binNo: 1, scanSequence: 1 });
 scanEventSchema.index({ partNumber: 1 });
 scanEventSchema.index({ scanTimestamp: -1 });
+scanEventSchema.index({ serialNumber: 1 }); // NEW: Index for serial lookup
+scanEventSchema.index({ partNumber: 1, serialNumber: 1 }); // NEW: Compound index
 
 packageSchema.index({ packageNo: 1 });
 packageSchema.index({ binNo: 1 });
 packageSchema.index({ status: 1 });
 packageSchema.index({ createdAt: -1 });
 
-// Virtual for completion percentage (alternative way to calculate if needed)
+// Virtual for completion percentage
 binDataSchema.virtual("calculatedCompletionPercentage").get(function () {
   return this.quantity > 0
     ? Math.round((this.scannedQuantity / this.quantity) * 100)
     : 0;
 });
 
-// Enhanced method to update scan progress with event tracking (simplified for sequence approach)
+// NEW: Method to check if serial number already exists in this bin
+binDataSchema.methods.hasSerialNumber = function (serialNumber) {
+  return this.serialNumbers.some(
+    (item) => item.serial.trim() === serialNumber.trim()
+  );
+};
+
+// NEW: Method to add serial number to bin
+binDataSchema.methods.addSerialNumber = function (
+  serialNumber,
+  scannedBy = null
+) {
+  if (!this.hasSerialNumber(serialNumber)) {
+    this.serialNumbers.push({
+      serial: serialNumber,
+      scannedAt: new Date(),
+      scannedBy: scannedBy,
+      scanSequence: this.scanSequence + 1,
+    });
+    this.lastScannedSerial = serialNumber;
+    return true;
+  }
+  return false;
+};
+
+// Enhanced method to update scan progress with serial number tracking
 binDataSchema.methods.updateScanProgress = async function (
   scannedCount,
   scanDetails = {}
@@ -224,7 +324,12 @@ binDataSchema.methods.updateScanProgress = async function (
 
   // Update scan metadata
   this.lastScannedAt = new Date();
-  this.scannedBy = scanDetails.scannedBy || "system";
+  this.scannedBy = scanDetails.scannedBy || this.scannedBy;
+
+  // NEW: Add serial number if provided
+  if (scanDetails.serialNumber) {
+    this.addSerialNumber(scanDetails.serialNumber, scanDetails.scannedBy);
+  }
 
   if (scanDetails.isValid !== undefined) {
     this.isValid = scanDetails.isValid;
@@ -245,7 +350,7 @@ binDataSchema.methods.updateScanProgress = async function (
     this.status = "completed";
     this.completedAt = new Date();
   } else if (this.completionPercentage > 0) {
-    this.status = "in_progress"; // Correct enum value
+    this.status = "in_progress";
   }
 
   // Save the bin data
@@ -254,7 +359,15 @@ binDataSchema.methods.updateScanProgress = async function (
   return this;
 };
 
-// Static method to get detailed scan history (using ScanEvent if you want to keep detailed logs)
+// NEW: Static method to check for duplicate serial across all bins
+binDataSchema.statics.findBySerialNumber = function (serialNumber, partNumber) {
+  return this.findOne({
+    "serialNumbers.serial": serialNumber,
+    partNumber: partNumber,
+  });
+};
+
+// Static method to get detailed scan history
 binDataSchema.statics.getScanHistory = function (binNo) {
   const ScanEvent = mongoose.model("ScanEvent");
   return ScanEvent.find({ binNo }).sort({ scanSequence: 1 });

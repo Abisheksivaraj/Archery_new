@@ -64,8 +64,36 @@ const Dispatch = () => {
   // Duplicate Serial Number Prevention State
   const [scannedSerialNumbers, setScannedSerialNumbers] = useState(new Set());
 
+  // Play error beep sound
+  const playErrorBeep = () => {
+    try {
+      const audioContext = new (window.AudioContext ||
+        window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.value = 800;
+      oscillator.type = "sine";
+
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.01,
+        audioContext.currentTime + 0.3
+      );
+
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.3);
+    } catch (error) {
+      console.error("Error playing beep sound:", error);
+    }
+  };
+
   // Function to show error dialog
   const showErrorDialog = (message, title = "Error", type = "error") => {
+    playErrorBeep(); // Play beep sound on all errors
     setErrorDialogData({
       title,
       message,
@@ -89,9 +117,14 @@ const Dispatch = () => {
     const serialKey = `${partNumber}_${serialNumber}`;
 
     if (scannedSerialNumbers.has(serialKey)) {
+      // Find which invoice this serial was scanned in
+      const matchingInvoice = Array.from(scannedSerialNumbers).find(
+        (key) => key === serialKey
+      );
+
       return {
         isDuplicate: true,
-        message: `Serial number "${serialNumber}" has already been scanned for part "${partNumber}".\n\nThis part has already been processed in the current session.\n\nPlease scan a different part or check your inventory.`,
+        message: `❌ DUPLICATE SERIAL NUMBER DETECTED\n\nSerial: ${serialNumber}\nPart: ${partNumber}\n\nThis serial was already scanned earlier in this work session.\n\nAction Required: Scan a different part with a unique serial number.`,
       };
     }
 
@@ -101,15 +134,9 @@ const Dispatch = () => {
     };
   };
 
-  const addScannedSerialNumber = (serialNumber, partNumber) => {
-    const serialKey = `${partNumber}_${serialNumber}`;
-    setScannedSerialNumbers((prev) => new Set([...prev, serialKey]));
-    console.log(`Added scanned serial: ${serialKey}`);
-  };
-
   const clearScannedSerialNumbers = () => {
     setScannedSerialNumbers(new Set());
-    console.log("Cleared scanned serial numbers for new bin/invoice");
+    console.log("Cleared scanned serial numbers for new invoice/session");
   };
 
   // Part name mapping
@@ -722,17 +749,6 @@ const Dispatch = () => {
       !binPartDetails.partNo ||
       invoicePartDetails.partNo.trim() !== binPartDetails.partNo.trim()
     );
-  };
-
-  // Get helper text for machine scanner
-  const getMachineScannerHelperText = () => {
-    if (!selectedInvoiceNo) return "Select invoice first";
-    if (!invoicePartDetails.partNo) return "Load invoice details first";
-    if (!binPartDetails.partNo) return "Scan bin QR code first";
-    if (invoicePartDetails.partNo.trim() !== binPartDetails.partNo.trim()) {
-      return "Part numbers don't match - scan correct bin";
-    }
-    return "Ready to scan parts";
   };
 
   // Store raw scan data
@@ -1486,8 +1502,10 @@ const Dispatch = () => {
       throw error;
     }
   };
+  const user = JSON.parse(localStorage.getItem("user"));
 
   // Update scan progress
+  // Update scan progress function
   const updateScanProgress = async (binNo, scannedCount, scanDetails = {}) => {
     try {
       const response = await api.post("/api/bindata/scan-progress", {
@@ -1496,12 +1514,19 @@ const Dispatch = () => {
         isValid: scanDetails.isValid !== false,
         mismatchReason: scanDetails.mismatchReason,
         machineData: scanDetails.machineData,
+        serialNumber: scanDetails.serialNumber, // ADD THIS
+        rawBarcodeData: scanDetails.rawBarcodeData, // ADD THIS
         invoiceNumber: selectedInvoiceNo,
         sessionId: sessionId,
+        scannedBy: user?.role || "Unknown",
         timestamp: new Date().toISOString(),
       });
 
       if (response.data.success) {
+        console.log("Scan progress updated with serial number:", {
+          serial: scanDetails.serialNumber,
+          totalSerials: response.data.data.totalSerials,
+        });
         return response.data;
       } else {
         throw new Error(
@@ -1627,6 +1652,30 @@ const Dispatch = () => {
     setTotalPackageCount(0);
   }, []);
 
+  // After the useState declaration for scannedSerialNumbers
+  useEffect(() => {
+    const saved = sessionStorage.getItem("scannedSerials");
+    if (saved) {
+      try {
+        setScannedSerialNumbers(new Set(JSON.parse(saved)));
+        console.log("Restored scanned serials from session storage");
+      } catch (e) {
+        console.error("Failed to restore serials:", e);
+      }
+    }
+  }, []);
+
+  // Update addScannedSerialNumber
+  const addScannedSerialNumber = (serialNumber, partNumber) => {
+    const serialKey = `${partNumber}_${serialNumber}`;
+    setScannedSerialNumbers((prev) => {
+      const updated = new Set([...prev, serialKey]);
+      sessionStorage.setItem("scannedSerials", JSON.stringify([...updated]));
+      return updated;
+    });
+    console.log(`Added scanned serial: ${serialKey}`);
+  };
+
   // ENHANCED: Handle invoice change with proper state management
   const handleInvoiceChange = async (e) => {
     const value = e.target.value;
@@ -1635,9 +1684,6 @@ const Dispatch = () => {
     setSelectedInvoiceNo(value);
 
     if (value) {
-      // Clear scanned serial numbers when switching invoices
-      clearScannedSerialNumbers();
-
       // Always fetch fresh invoice details and update statistics
       await fetchInvoiceDetails(value);
 
@@ -1786,8 +1832,8 @@ const Dispatch = () => {
           setScannedQuantity(alreadyScanned);
           setProgress(Math.round((alreadyScanned / initialBinQuantity) * 100));
 
-          // Clear scanned serial numbers when switching to new bin
-          clearScannedSerialNumbers();
+          // DO NOT clear scanned serial numbers - track across all bins in session
+          // clearScannedSerialNumbers(); // REMOVED to track serials across bins
 
           // ENHANCED: Calculate and set bin count if not already set
           if (totalBinCount === 0 && invoicePartDetails.originalQuantity) {
@@ -2099,6 +2145,8 @@ const Dispatch = () => {
             {
               isValid: true,
               machineData: parsedData,
+              serialNumber: extractedSerialNumber, // ADD THIS
+              rawBarcodeData: rawValue,
             }
           );
 
@@ -2164,8 +2212,9 @@ const Dispatch = () => {
           setScannedQuantity(0);
           setProgress(0);
 
-          // Clear scanned serial numbers for next bin
-          clearScannedSerialNumbers();
+          // DO NOT clear scanned serial numbers for next bin
+          // Track serials across all bins in the current invoice
+          // clearScannedSerialNumbers(); // REMOVED to track serials across bins
 
           // Save statistics after bin completion
           setTimeout(async () => {
@@ -2216,7 +2265,6 @@ const Dispatch = () => {
       setRemainingBinQuantity(parseInt(binPartDetails.originalQuantity) || 0);
       setProgress(0);
 
-      // Reset bin tracking
       setCompletedBinCount(0);
       setInvoiceProgress((prev) => ({
         ...prev,
@@ -2225,15 +2273,14 @@ const Dispatch = () => {
         remainingQuantity: prev.totalQuantity,
       }));
 
-      // Clear scanned serial numbers when resetting all counts
+      // Clear scanned serial numbers only on manual reset
       clearScannedSerialNumbers();
 
-      // Save statistics after reset
       setTimeout(async () => {
         await saveCurrentStatistics();
       }, 500);
 
-      toast.success("All counts reset successfully");
+      toast.success("All counts and serial tracking reset successfully");
     } catch (error) {
       console.error("Error resetting counts:", error);
       showErrorDialog("Failed to reset counts", "Reset Error", "error");
@@ -2275,6 +2322,7 @@ const Dispatch = () => {
         }}
       />
 
+      {/* Error Dialog */}
       {/* Error Dialog */}
       <Dialog
         open={errorDialogOpen}
@@ -2395,7 +2443,7 @@ const Dispatch = () => {
               }}
             >
               <Typography variant="body2" color="#1976d2" fontWeight="500">
-                💡 Tip: Ensure you have selected the correct invoice and scanned
+                Tip: Ensure you have selected the correct invoice and scanned
                 the appropriate bin before scanning parts.
               </Typography>
             </Box>
@@ -3063,7 +3111,6 @@ const Dispatch = () => {
                       autoComplete="off"
                       placeholder="Scan: L012331400M52T1001082512833"
                       disabled={isMachineScannerDisabled()}
-                      helperText={getMachineScannerHelperText()}
                       error={
                         invoicePartDetails.partNo &&
                         binPartDetails.partNo &&
