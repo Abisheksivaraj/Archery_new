@@ -25,6 +25,8 @@ import {
   DialogContent,
   DialogActions,
   Button,
+  Tabs,
+  Tab,
 } from "@mui/material";
 
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -35,6 +37,8 @@ import BackpackIcon from "@mui/icons-material/Backpack";
 import PrecisionManufacturingIcon from "@mui/icons-material/PrecisionManufacturing";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import AddCircleIcon from "@mui/icons-material/AddCircle";
+import ListIcon from "@mui/icons-material/List";
 
 // Utility function for debouncing
 const debounce = (func, wait) => {
@@ -52,6 +56,14 @@ const debounce = (func, wait) => {
 const Dispatch = () => {
   const theme = useTheme();
   const isSmall = useMediaQuery(theme.breakpoints.down("sm"));
+
+  // Tab state for switching between Scan New and Select Existing
+  const [invoiceTabValue, setInvoiceTabValue] = useState(0); // 0 = Scan New, 1 = Select Existing
+
+  // New Invoice Scanning States
+  const [newInvoiceBarcode, setNewInvoiceBarcode] = useState("");
+  const [parsedInvoiceData, setParsedInvoiceData] = useState(null);
+  const [scanningInvoice, setScanningInvoice] = useState(false);
 
   // Error Dialog States
   const [errorDialogOpen, setErrorDialogOpen] = useState(false);
@@ -152,6 +164,137 @@ const Dispatch = () => {
     return partNameMapping[partNo] || "Unknown Part";
   };
 
+  // Parse invoice barcode (from Job Card logic)
+  const parseInvoiceBarcode = (barcode) => {
+    const parts = barcode.trim().split(/\s+/);
+
+    return {
+      vendorCode: parts[0] || "",
+      poNumber: parts[1] || "",
+      invoiceNumber: parts[2] || "",
+      date: parts[3] || "",
+      field5: parts[4] || "",
+      field6: parts[5] || "",
+      field7: parts[6] || "",
+      vehicleNumber: parts[7] || "",
+      field9: parts[8] || "",
+      field10: parts[9] || "",
+      field11: parts[10] || "",
+      partNumber: parts[11] || "",
+      field13: parts[12] || "",
+      quantity: parts[13] || "",
+      field15: parts[14] || "",
+      rawData: barcode,
+    };
+  };
+
+  // Submit new invoice to API
+  const submitNewInvoiceToApi = async (barcodeData) => {
+    try {
+      const response = await api.post("/api/scan/", {
+        barcodeData,
+      });
+
+      if (!response.data.success) {
+        throw new Error(response.data.message || "Failed to submit invoice");
+      }
+
+      return response.data;
+    } catch (error) {
+      if (error.response) {
+        throw new Error(error.response.data.message || "Server error");
+      }
+      throw error;
+    }
+  };
+
+  const [sessionId] = useState(
+    () => `SESSION_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  );
+
+  // Refs - ADD THIS ENTIRE SECTION IF IT'S MISSING
+  const scanQuantityRef = useRef(null);
+  const machineBarcodeRef = useRef(null);
+  const newInvoiceBarcodeRef = useRef(null);
+
+  // Handle new invoice barcode input
+  // Handle new invoice barcode input with debouncing
+  const handleNewInvoiceBarcodeChange = (e) => {
+    const value = e.target.value;
+    setNewInvoiceBarcode(value);
+
+    // Clear any existing timeout
+    if (window.invoiceBarcodeTimeout) {
+      clearTimeout(window.invoiceBarcodeTimeout);
+    }
+
+    // Don't process if input is too short
+    if (value.length < 20) {
+      setParsedInvoiceData(null);
+      return;
+    }
+
+    // Wait for barcode scanner to finish sending all data
+    window.invoiceBarcodeTimeout = setTimeout(async () => {
+      const parsed = parseInvoiceBarcode(value);
+      setParsedInvoiceData(parsed);
+
+      // Auto-submit when barcode has all required fields
+      if (parsed.invoiceNumber && parsed.partNumber && parsed.quantity) {
+        await handleSubmitNewInvoice(value);
+      }
+    }, 300); // Wait 300ms after last character before processing
+  };
+
+  const handleSubmitNewInvoice = async (barcodeData) => {
+    setScanningInvoice(true);
+
+    try {
+      const result = await submitNewInvoiceToApi(barcodeData);
+
+      if (result.success) {
+        toast.success(
+          `Invoice ${result.data.invoiceNumber} saved successfully!`
+        );
+
+        // Auto-select the newly scanned invoice
+        setSelectedInvoiceNo(result.data.invoiceNumber);
+
+        // Fetch and populate invoice details
+        await fetchInvoiceDetails(result.data.invoiceNumber);
+
+        // Clear the barcode input
+        setNewInvoiceBarcode("");
+        setParsedInvoiceData(null);
+
+        // Refresh invoice list
+        await fetchInvoices();
+      }
+    } catch (err) {
+      if (err.message.includes("already exists")) {
+        showErrorDialog(
+          `Duplicate invoice: ${err.message}\n\nThis invoice was already scanned. Switch to "Select Existing" tab to use it.`,
+          "Duplicate Invoice",
+          "warning"
+        );
+      } else if (err.message.includes("Validation failed")) {
+        showErrorDialog(
+          "Invalid barcode format. Missing required fields (Invoice Number, Part Number, or Quantity).",
+          "Validation Error",
+          "error"
+        );
+      } else {
+        showErrorDialog(
+          `Failed to save invoice: ${err.message}`,
+          "Save Error",
+          "error"
+        );
+      }
+    } finally {
+      setScanningInvoice(false);
+    }
+  };
+
   // State variables
   const [invoices, setInvoices] = useState([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
@@ -212,14 +355,6 @@ const Dispatch = () => {
   });
   const [allBinsCompletedDialogOpen, setAllBinsCompletedDialogOpen] =
     useState(false);
-
-  const [sessionId] = useState(
-    () => `SESSION_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  );
-
-  // Refs
-  const scanQuantityRef = useRef(null);
-  const machineBarcodeRef = useRef(null);
 
   // =============================================================================
   // STATISTICS STORAGE FUNCTIONS
@@ -618,7 +753,6 @@ const Dispatch = () => {
         const partNo = invoiceData.partNumber || "";
         const partName = getPartNameByPartNo(partNo);
 
-        // Set invoice details
         setInvoicePartDetails({
           partNo: partNo,
           partName: partName,
@@ -627,71 +761,14 @@ const Dispatch = () => {
           packageCount: 0,
         });
 
-        // First, try to restore saved progress
-        console.log("Attempting to restore saved progress...");
-        const savedProgress = await fetchInvoiceProgress(invoiceNumber);
-        const savedStats = await fetchSavedStatistics(invoiceNumber);
+        setRemainingTotalQuantity(originalQuantity);
+        setScannedPartsCount(0);
+        setCompletedBinCount(0);
+        setTotalBinCount(0);
 
-        if (savedProgress || savedStats) {
-          // Restore from saved data
-          const progressData = savedProgress || {};
-          const statsData = savedStats || {};
-
-          const restoredScannedParts =
-            progressData.scannedQuantity || statsData.scannedPartCount || 0;
-          const restoredCompletedBins =
-            progressData.completedBins || statsData.completedBinCount || 0;
-          const restoredTotalBins =
-            progressData.totalBins || statsData.totalBinCount || 0;
-          const restoredRemaining = Math.max(
-            0,
-            originalQuantity - restoredScannedParts
-          );
-
-          // Update all related states
-          setScannedPartsCount(restoredScannedParts);
-          setCompletedBinCount(restoredCompletedBins);
-          setTotalBinCount(restoredTotalBins);
-          setRemainingTotalQuantity(restoredRemaining);
-
-          setInvoiceProgress({
-            totalQuantity: originalQuantity,
-            scannedQuantity: restoredScannedParts,
-            totalBins: restoredTotalBins,
-            completedBins: restoredCompletedBins,
-            remainingQuantity: restoredRemaining,
-            binSize: progressData.binSize || 0,
-          });
-
-          console.log("Progress restored:", {
-            scannedParts: restoredScannedParts,
-            completedBins: restoredCompletedBins,
-            totalBins: restoredTotalBins,
-            remaining: restoredRemaining,
-          });
-
-          toast.success(
-            `Invoice ${invoiceNumber} restored! Progress: ${restoredCompletedBins}/${restoredTotalBins} bins, ${restoredScannedParts}/${originalQuantity} parts`
-          );
-        } else {
-          // No saved progress - start fresh
-          console.log("No saved progress found - starting fresh");
-          resetInvoiceProgress(originalQuantity);
-
-          toast.success(
-            `Invoice ${invoiceNumber} loaded! Part: ${partName} (${originalQuantity} total)`
-          );
-        }
-
-        // Fetch package count
-        if (partNo) {
-          await fetchPartPackageCount(partNo);
-        }
-
-        // Save/update statistics after loading
-        setTimeout(async () => {
-          await saveCurrentStatistics();
-        }, 500);
+        toast.success(
+          `Invoice ${invoiceNumber} loaded! Part: ${partName} (${originalQuantity} total)`
+        );
       } else {
         throw new Error("No data found for this invoice");
       }
@@ -703,9 +780,6 @@ const Dispatch = () => {
         "Invoice Details Error",
         "error"
       );
-
-      // Reset states on error
-      resetInvoiceProgress(0);
     }
   };
 
@@ -1679,30 +1753,22 @@ const Dispatch = () => {
   // ENHANCED: Handle invoice change with proper state management
   const handleInvoiceChange = async (e) => {
     const value = e.target.value;
-    const previousInvoice = selectedInvoiceNo;
-
     setSelectedInvoiceNo(value);
 
     if (value) {
-      // Always fetch fresh invoice details and update statistics
       await fetchInvoiceDetails(value);
-
-      // If the same invoice is selected again, force refresh
-      if (previousInvoice === value) {
-        console.log(
-          `Same invoice ${value} selected again - refreshing statistics`
-        );
-        setTimeout(async () => {
-          await manualRefreshStatistics();
-        }, 1000);
-        toast.success(`Invoice ${value} statistics refreshed!`);
-      }
     } else {
       resetAllStates();
     }
   };
 
-  // Reset all states function
+  // Focus management
+  useEffect(() => {
+    if (invoiceTabValue === 0 && newInvoiceBarcodeRef.current) {
+      newInvoiceBarcodeRef.current.focus();
+    }
+  }, [invoiceTabValue]);
+
   const resetAllStates = () => {
     setInvoicePartDetails({
       partNo: "",
@@ -1734,16 +1800,12 @@ const Dispatch = () => {
     setRemainingBinQuantity(0);
     setTotalBinCount(0);
     setCompletedBinCount(0);
-    setInvoiceProgress({
-      totalQuantity: 0,
-      scannedQuantity: 0,
-      totalBins: 0,
-      completedBins: 0,
-      remainingQuantity: 0,
-      binSize: 0,
-    });
     clearScannedSerialNumbers();
   };
+
+  useEffect(() => {
+    fetchInvoices();
+  }, []);
 
   // ENHANCED: QR Code processing with improved bin count calculation
   const handleScanQuantityChange = async (e) => {
@@ -2293,6 +2355,15 @@ const Dispatch = () => {
     setStatus("⚠️ processing");
   };
 
+  useEffect(() => {
+    // Cleanup function
+    return () => {
+      if (window.invoiceBarcodeTimeout) {
+        clearTimeout(window.invoiceBarcodeTimeout);
+      }
+    };
+  }, []);
+
   return (
     <Box
       sx={{
@@ -2323,25 +2394,11 @@ const Dispatch = () => {
       />
 
       {/* Error Dialog */}
-      {/* Error Dialog */}
       <Dialog
         open={errorDialogOpen}
         onClose={closeErrorDialog}
         maxWidth="md"
         fullWidth
-        fullScreen={isSmall}
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            boxShadow: "0 12px 40px rgba(0,0,0,0.15)",
-            border:
-              errorDialogData.type === "error"
-                ? "2px solid #f44336"
-                : errorDialogData.type === "validation"
-                ? "2px solid #ff9800"
-                : "2px solid #ffb74d",
-          },
-        }}
       >
         <DialogTitle
           sx={{
@@ -2354,7 +2411,6 @@ const Dispatch = () => {
             color: "white",
             textAlign: "center",
             py: 3,
-            position: "relative",
           }}
         >
           <Box
@@ -2365,523 +2421,25 @@ const Dispatch = () => {
               gap: 2,
             }}
           >
-            <Box
-              sx={{
-                width: 48,
-                height: 48,
-                borderRadius: "50%",
-                bgcolor: "rgba(255,255,255,0.2)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "24px",
-              }}
-            >
-              <ErrorOutlineIcon sx={{ fontSize: "28px", color: "white" }} />
-            </Box>
-            <Box>
-              <Typography variant="h5" fontWeight="600">
-                {errorDialogData.title}
-              </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
-                {errorDialogData.type === "validation"
-                  ? "Validation Error"
-                  : errorDialogData.type === "warning"
-                  ? "Warning"
-                  : "System Error"}
-              </Typography>
-            </Box>
-          </Box>
-        </DialogTitle>
-
-        <DialogContent sx={{ p: 3 }}>
-          <Box
-            sx={{
-              bgcolor:
-                errorDialogData.type === "error"
-                  ? "#ffebee"
-                  : errorDialogData.type === "validation"
-                  ? "#fff3e0"
-                  : "#fff8e1",
-              borderLeft: `4px solid ${
-                errorDialogData.type === "error"
-                  ? "#f44336"
-                  : errorDialogData.type === "validation"
-                  ? "#ff9800"
-                  : "#ffb74d"
-              }`,
-              p: 2,
-              borderRadius: 1,
-              mb: 2,
-            }}
-          >
-            <Typography
-              variant="body1"
-              sx={{
-                whiteSpace: "pre-line",
-                lineHeight: 1.6,
-                color:
-                  errorDialogData.type === "error"
-                    ? "#c62828"
-                    : errorDialogData.type === "validation"
-                    ? "#ef6c00"
-                    : "#e65100",
-              }}
-            >
-              {errorDialogData.message}
+            <ErrorOutlineIcon sx={{ fontSize: "28px" }} />
+            <Typography variant="h5" fontWeight="600">
+              {errorDialogData.title}
             </Typography>
           </Box>
-
-          {errorDialogData.type === "validation" && (
-            <Box
-              sx={{
-                mt: 2,
-                p: 2,
-                bgcolor: "#e3f2fd",
-                borderRadius: 1,
-                border: "1px solid #bbdefb",
-              }}
-            >
-              <Typography variant="body2" color="#1976d2" fontWeight="500">
-                Tip: Ensure you have selected the correct invoice and scanned
-                the appropriate bin before scanning parts.
-              </Typography>
-            </Box>
-          )}
+        </DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
+          <Typography sx={{ whiteSpace: "pre-line", lineHeight: 1.6 }}>
+            {errorDialogData.message}
+          </Typography>
         </DialogContent>
-
         <DialogActions sx={{ p: 3, justifyContent: "center" }}>
           <Button
             onClick={closeErrorDialog}
             variant="contained"
             size="large"
-            sx={{
-              bgcolor:
-                errorDialogData.type === "error"
-                  ? "#f44336"
-                  : errorDialogData.type === "validation"
-                  ? "#ff9800"
-                  : "#ffb74d",
-              px: 4,
-              py: 1.5,
-              fontSize: "1.1rem",
-              fontWeight: "600",
-              "&:hover": {
-                bgcolor:
-                  errorDialogData.type === "error"
-                    ? "#d32f2f"
-                    : errorDialogData.type === "validation"
-                    ? "#f57c00"
-                    : "#ffa726",
-              },
-            }}
+            sx={{ px: 4, py: 1.5 }}
           >
             OK
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* All Bins Completed Dialog */}
-      <Dialog
-        open={allBinsCompletedDialogOpen}
-        onClose={() => setAllBinsCompletedDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            boxShadow: "0 12px 40px rgba(0,0,0,0.15)",
-            border: "2px solid #4CAF50",
-          },
-        }}
-      >
-        <DialogTitle
-          sx={{
-            bgcolor: "linear-gradient(135deg, #4CAF50 0%, #45a049 100%)",
-            color: "white",
-            textAlign: "center",
-            py: 4,
-            position: "relative",
-          }}
-        >
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 2,
-            }}
-          >
-            <Box
-              sx={{
-                width: 60,
-                height: 60,
-                borderRadius: "50%",
-                bgcolor: "rgba(255,255,255,0.2)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "32px",
-              }}
-            >
-              🎉
-            </Box>
-            <Box>
-              <Typography variant="h4" fontWeight="700">
-                INVOICE COMPLETED!
-              </Typography>
-              <Typography variant="h6" sx={{ opacity: 0.9, mt: 0.5 }}>
-                All bins processed successfully
-              </Typography>
-            </Box>
-          </Box>
-        </DialogTitle>
-
-        <DialogContent sx={{ p: 4 }}>
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <Box
-                sx={{
-                  bgcolor: "#E8F5E8",
-                  borderRadius: 2,
-                  p: 3,
-                  textAlign: "center",
-                  border: "2px solid #C8E6C9",
-                }}
-              >
-                <Typography variant="h5" color="#2E7D32" fontWeight="600">
-                  Invoice {selectedInvoiceNo} - 100% Complete
-                </Typography>
-                <Typography variant="body1" sx={{ mt: 1, color: "#4CAF50" }}>
-                  Total Bins Processed: {completedBinCount}/{totalBinCount}
-                </Typography>
-                <Typography variant="body1" sx={{ color: "#4CAF50" }}>
-                  Total Parts Scanned: {scannedPartsCount}/
-                  {invoicePartDetails.originalQuantity}
-                </Typography>
-              </Box>
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <Box sx={{ textAlign: "center" }}>
-                <Typography variant="caption" color="text.secondary">
-                  PART NUMBER
-                </Typography>
-                <Typography
-                  variant="h6"
-                  fontWeight="600"
-                  sx={{ fontFamily: "monospace" }}
-                >
-                  {invoicePartDetails.partNo}
-                </Typography>
-              </Box>
-            </Grid>
-          </Grid>
-        </DialogContent>
-
-        <DialogActions sx={{ p: 3, justifyContent: "center" }}>
-          <Button
-            onClick={() => setAllBinsCompletedDialogOpen(false)}
-            variant="contained"
-            size="large"
-            sx={{
-              bgcolor: "#4CAF50",
-              px: 4,
-              py: 1.5,
-              fontSize: "1.1rem",
-              fontWeight: "600",
-              "&:hover": { bgcolor: "#45a049" },
-            }}
-          >
-            Continue to Next Invoice
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Mismatch Dialog */}
-      <Dialog
-        open={mismatchDialogOpen}
-        onClose={() => {
-          setMismatchDialogOpen(false);
-          setMismatchMessage("");
-          setStatus("⚠️ processing");
-        }}
-      >
-        <DialogTitle sx={{ color: "error.main" }}>
-          Part Number Mismatch
-        </DialogTitle>
-        <DialogContent>
-          <Typography sx={{ whiteSpace: "pre-line" }}>
-            {mismatchMessage}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setMismatchDialogOpen(false);
-              setMismatchMessage("");
-              setStatus("⚠️ processing");
-            }}
-            color="primary"
-          >
-            OK
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Completion Dialog */}
-      <Dialog
-        open={completionDialogOpen}
-        onClose={() => setCompletionDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-        fullScreen={isSmall}
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.08)",
-            border: "1px solid #E8E8E8",
-          },
-        }}
-      >
-        <DialogTitle
-          sx={{
-            bgcolor: "#F8F9FA",
-            color: "#2C3E50",
-            textAlign: "center",
-            py: 3,
-            position: "relative",
-            borderBottom: "2px solid #E3F2FD",
-            "&::before": {
-              content: '""',
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              height: "4px",
-              bgcolor: "#64B5F6",
-            },
-          }}
-        >
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 2,
-            }}
-          >
-            <Box
-              sx={{
-                width: 48,
-                height: 48,
-                borderRadius: "50%",
-                bgcolor: "#E8F5E8",
-                border: "2px solid #81C784",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "24px",
-                color: "#4CAF50",
-              }}
-            >
-              ✓
-            </Box>
-            <Box>
-              <Typography variant="h5" fontWeight="600" color="#2C3E50">
-                BIN PROCESSING COMPLETE
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{ opacity: 0.7, mt: 0.5, color: "#64B5F6" }}
-              >
-                Processing completed successfully
-              </Typography>
-            </Box>
-          </Box>
-        </DialogTitle>
-        <DialogContent sx={{ p: 0 }}>
-          <Box
-            sx={{
-              bgcolor: "#F0F8F0",
-              borderLeft: "4px solid #81C784",
-              p: 2,
-              display: "flex",
-              alignItems: "center",
-              gap: 2,
-            }}
-          >
-            <Box
-              sx={{
-                width: 12,
-                height: 12,
-                borderRadius: "50%",
-                bgcolor: "#4CAF50",
-                animation: "pulse 2s infinite",
-                "@keyframes pulse": {
-                  "0%": { opacity: 1 },
-                  "50%": { opacity: 0.5 },
-                  "100%": { opacity: 1 },
-                },
-              }}
-            />
-            <Typography variant="body1" fontWeight="600" color="#2E7D32">
-              All {completionDialogData.totalQuantity} components successfully
-              processed and verified
-            </Typography>
-          </Box>
-
-          <Box sx={{ p: isSmall ? 1 : 3 }}>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <Typography
-                  variant="overline"
-                  sx={{
-                    fontSize: "0.85rem",
-                    fontWeight: 700,
-                    color: "#64B5F6",
-                  }}
-                >
-                  PRODUCTION DETAILS
-                </Typography>
-                <Box sx={{ mt: 1, mb: 2, height: "2px", bgcolor: "#E3F2FD" }} />
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <Box sx={{ textAlign: "center" }}>
-                  <Typography
-                    variant="caption"
-                    color="#78909C"
-                    sx={{ textTransform: "uppercase" }}
-                  >
-                    Bin No
-                  </Typography>
-                  <Typography
-                    variant="h6"
-                    fontWeight="bold"
-                    sx={{ mt: 0.5, fontFamily: "monospace", color: "#37474F" }}
-                  >
-                    {completionDialogData.binNo}
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <Box sx={{ textAlign: "center" }}>
-                  <Typography
-                    variant="caption"
-                    color="#78909C"
-                    sx={{ textTransform: "uppercase" }}
-                  >
-                    Part Number
-                  </Typography>
-                  <Typography
-                    variant="h6"
-                    fontWeight="bold"
-                    sx={{ mt: 0.5, fontFamily: "monospace", color: "#37474F" }}
-                  >
-                    {completionDialogData.partNo}
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <Box sx={{ textAlign: "center" }}>
-                  <Typography
-                    variant="caption"
-                    color="#78909C"
-                    sx={{ textTransform: "uppercase" }}
-                  >
-                    Quantity
-                  </Typography>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      mt: 0.5,
-                    }}
-                  >
-                    <Typography variant="h5" fontWeight="bold" color="#4CAF50">
-                      {completionDialogData.scannedQuantity}
-                    </Typography>
-                    <Typography variant="h6" color="#78909C" sx={{ mx: 0.5 }}>
-                      /
-                    </Typography>
-                    <Typography variant="h6" color="#78909C">
-                      {completionDialogData.totalQuantity}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Grid>
-              <Grid item xs={12}>
-                <Box
-                  sx={{
-                    mt: 2,
-                    p: 2.5,
-                    bgcolor: "#FAFBFC",
-                    borderRadius: 2,
-                    border: "1px solid #E1F5FE",
-                  }}
-                >
-                  <Typography
-                    variant="body2"
-                    color="#455A64"
-                    sx={{ textAlign: "center", lineHeight: 1.6 }}
-                  >
-                    <strong style={{ color: "#2C3E50" }}>
-                      PROCESS SUMMARY:
-                    </strong>{" "}
-                    Bin no: {completionDialogData.binNo} has been successfully
-                    processed with all {completionDialogData.totalQuantity}{" "}
-                    components scanned, verified, and approved for next stage
-                    operations.
-                  </Typography>
-                </Box>
-              </Grid>
-            </Grid>
-          </Box>
-        </DialogContent>
-        <DialogActions
-          sx={{
-            p: isSmall ? 1 : 3,
-            bgcolor: "#F8F9FA",
-            justifyContent: "space-between",
-            borderTop: "2px solid #E3F2FD",
-            flexDirection: isSmall ? "column" : "row",
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <Box
-              sx={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                bgcolor: "#4CAF50",
-              }}
-            />
-            <Typography variant="body2" color="#64B5F6" fontWeight="500">
-              Ready for next operation
-            </Typography>
-          </Box>
-          <Button
-            onClick={() => setCompletionDialogOpen(false)}
-            variant="contained"
-            size="large"
-            sx={{
-              bgcolor: "#64B5F6",
-              color: "white",
-              px: isSmall ? 2 : 4,
-              py: 1.5,
-              fontWeight: "600",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-              borderRadius: 2,
-              boxShadow: "0 4px 12px rgba(100, 181, 246, 0.3)",
-              "&:hover": {
-                bgcolor: "#42A5F5",
-                boxShadow: "0 6px 16px rgba(100, 181, 246, 0.4)",
-              },
-            }}
-          >
-            Continue Production
           </Button>
         </DialogActions>
       </Dialog>
@@ -2893,10 +2451,7 @@ const Dispatch = () => {
             item
             xs={12}
             md={8}
-            sx={{
-              height: "100%",
-              pb: isSmall ? 2 : 0,
-            }}
+            sx={{ height: "100%", pb: isSmall ? 2 : 0 }}
           >
             <Box
               sx={{
@@ -2906,7 +2461,7 @@ const Dispatch = () => {
                 height: "100%",
               }}
             >
-              {/* Invoice Details */}
+              {/* Invoice Details with Tabs */}
               <Paper sx={{ p: { xs: 1, sm: 1.5 }, flexShrink: 0 }}>
                 <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
                   <SettingsIcon
@@ -2917,82 +2472,128 @@ const Dispatch = () => {
                   <Typography variant="h6" color="primary">
                     Invoice Details
                   </Typography>
-                  {selectedInvoiceNo && (
-                    <Tooltip title="Refresh invoice statistics" arrow>
-                      <IconButton
-                        size="small"
-                        onClick={manualRefreshStatistics}
-                        sx={{ ml: 2 }}
-                      >
-                        <RefreshIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  )}
                 </Box>
-                <Grid container spacing={isSmall ? 1 : 2}>
-                  <Grid item xs={12} sm={3}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Invoice No</InputLabel>
-                      <Select
-                        value={selectedInvoiceNo}
-                        onChange={handleInvoiceChange}
-                        label="Invoice No"
-                        autoFocus={!isSmall}
-                        disabled={loadingInvoices}
-                      >
-                        <MenuItem value="">
-                          <em>
-                            {loadingInvoices ? "Loading..." : "Select Invoice"}
-                          </em>
-                        </MenuItem>
-                        {invoices.map((invoice, index) => (
-                          <MenuItem key={index} value={invoice.invoiceNumber}>
-                            {invoice.invoiceNumber}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} sm={3}>
+
+                {/* Tabs for Scan New vs Select Existing */}
+                <Tabs
+                  value={invoiceTabValue}
+                  onChange={(e, newValue) => setInvoiceTabValue(newValue)}
+                  sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}
+                >
+                  <Tab icon={<AddCircleIcon />} label="Scan New Invoice" />
+                  <Tab icon={<ListIcon />} label="Select Existing" />
+                </Tabs>
+
+                {/* Tab Panel: Scan New Invoice */}
+                {invoiceTabValue === 0 && (
+                  <Box>
                     <TextField
-                      label="Part No"
-                      value={invoicePartDetails.partNo}
+                      label="Invoice Barcode Scanner"
+                      inputRef={newInvoiceBarcodeRef}
+                      value={newInvoiceBarcode}
+                      onChange={handleNewInvoiceBarcodeChange}
                       fullWidth
                       size="small"
-                      InputProps={{ readOnly: true }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={3}>
-                    <TextField
-                      label="Part Name"
-                      value={invoicePartDetails.partName}
-                      fullWidth
-                      size="small"
-                      InputProps={{
-                        readOnly: true,
-                        style: {
-                          fontWeight: "bold",
-                          color: "#1976d2",
-                        },
-                      }}
+                      autoComplete="off"
+                      placeholder="Scan invoice barcode (e.g., L059 1609036 1B25007182...)"
+                      disabled={scanningInvoice}
+                      helperText="Scan the full invoice barcode to create a new invoice entry"
+                      multiline // ADD THIS
+                      maxRows={3} // ADD THIS
                       sx={{
-                        "& .MuiInputBase-root": {
-                          backgroundColor: "#f5f5f5",
+                        mb: 2,
+                        "& .MuiInputBase-input": {
+                          fontFamily: "monospace", // ADD THIS for better readability
+                          fontSize: "0.85rem",
                         },
                       }}
                     />
+
+                    {/* {parsedInvoiceData && (
+                      <Alert severity="info" sx={{ mb: 2 }}>
+                        <AlertTitle>Invoice Data Detected</AlertTitle>
+                        <Typography variant="body2">
+                          <strong>Invoice:</strong>{" "}
+                          {parsedInvoiceData.invoiceNumber}
+                        </Typography>
+                        <Typography variant="body2">
+                          <strong>Part:</strong> {parsedInvoiceData.partNumber}
+                        </Typography>
+                        <Typography variant="body2">
+                          <strong>Qty:</strong> {parsedInvoiceData.quantity}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ mt: 1, display: "block" }}
+                        >
+                          Raw data length: {parsedInvoiceData.rawData.length}{" "}
+                          characters
+                        </Typography>
+                      </Alert>
+                    )} */}
+
+                    {scanningInvoice && <LinearProgress sx={{ mb: 2 }} />}
+                  </Box>
+                )}
+
+                {/* Tab Panel: Select Existing Invoice */}
+                {invoiceTabValue === 1 && (
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Select Invoice</InputLabel>
+                    <Select
+                      value={selectedInvoiceNo}
+                      onChange={handleInvoiceChange}
+                      label="Select Invoice"
+                      disabled={loadingInvoices}
+                    >
+                      <MenuItem value="">
+                        <em>
+                          {loadingInvoices ? "Loading..." : "Select Invoice"}
+                        </em>
+                      </MenuItem>
+                      {invoices.map((invoice, index) => (
+                        <MenuItem key={index} value={invoice.invoiceNumber}>
+                          {invoice.invoiceNumber}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
+
+                {/* Display selected invoice details */}
+                {selectedInvoiceNo && (
+                  <Grid container spacing={2} sx={{ mt: 1 }}>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="Invoice No"
+                        value={selectedInvoiceNo}
+                        fullWidth
+                        size="small"
+                        InputProps={{ readOnly: true }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="Part No"
+                        value={invoicePartDetails.partNo}
+                        fullWidth
+                        size="small"
+                        InputProps={{ readOnly: true }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="Quantity"
+                        value={remainingTotalQuantity}
+                        fullWidth
+                        size="small"
+                        InputProps={{ readOnly: true }}
+                        helperText={`Scanned: ${scannedPartsCount}`}
+                      />
+                    </Grid>
                   </Grid>
-                  <Grid item xs={12} sm={3}>
-                    <TextField
-                      label="Invoice Quantity"
-                      value={remainingTotalQuantity}
-                      fullWidth
-                      size="small"
-                      InputProps={{ readOnly: true }}
-                      helperText={`Scanned: ${scannedPartsCount}`}
-                    />
-                  </Grid>
-                </Grid>
+                )}
               </Paper>
 
               {/* Bin Details */}
