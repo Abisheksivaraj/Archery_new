@@ -16,16 +16,23 @@ const App = () => {
 
   return (
     <div
-      style={{  
+      style={{
         display: "flex",
         flexDirection: "column",
         minHeight: "100vh",
+        overflow: "auto", // Enable scrolling for the entire app
       }}
     >
       {!isAuthPage && (
-        <div>
+        <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
           <Sidebar />
-          <div>
+          <div
+            style={{
+              flex: 1,
+              overflow: "auto", // Enable scrolling for content area
+              paddingBottom: isDashboard ? 0 : "60px", // Add padding if footer is visible
+            }}
+          >
             <Routes>
               <Route path="/" element={<Auth />} />
             </Routes>
@@ -34,14 +41,14 @@ const App = () => {
       )}
 
       {isAuthPage && (
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, overflow: "auto" }}>
           <Routes>
             <Route path="/" element={<Auth />} />
           </Routes>
         </div>
       )}
 
-      {/* ✅ Fix: Ensure Footer is hidden for both Auth and Dashboard pages */}
+      {/* Footer - hidden for Auth and Dashboard pages */}
       {!isAuthPage && !isDashboard && (
         <div
           style={{
@@ -49,8 +56,10 @@ const App = () => {
             bottom: 0,
             left: 0,
             width: "100%",
+            height: "60px", // Fixed height for the footer
             backgroundColor: "white",
             zIndex: 1000,
+            boxShadow: "0 -2px 5px rgba(0,0,0,0.1)",
           }}
         >
           <Footer />
