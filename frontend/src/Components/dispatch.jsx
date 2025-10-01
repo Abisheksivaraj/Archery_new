@@ -64,6 +64,7 @@ const Dispatch = () => {
   const [newInvoiceBarcode, setNewInvoiceBarcode] = useState("");
   const [parsedInvoiceData, setParsedInvoiceData] = useState(null);
   const [scanningInvoice, setScanningInvoice] = useState(false);
+  const [isLoadingStatistics, setIsLoadingStatistics] = useState(false);
 
   // Error Dialog States
   const [errorDialogOpen, setErrorDialogOpen] = useState(false);
@@ -182,6 +183,45 @@ const Dispatch = () => {
       field15: parts[14] || "",
       rawData: barcode,
     };
+  };
+
+  const syncAllStatistics = async () => {
+    if (!selectedInvoiceNo) return;
+
+    try {
+      setIsLoadingStatistics(true);
+      const savedStats = await fetchSavedStatistics(selectedInvoiceNo);
+      if (savedStats) {
+        // Update all state values atomically
+        setScannedPartsCount(savedStats.scannedPartCount || 0);
+        setCompletedBinCount(savedStats.completedBinCount || 0);
+        setTotalBinCount(savedStats.totalBinCount || 0);
+        setRemainingTotalQuantity(savedStats.invoiceRemaining || 0);
+
+        // Also update the bin details if there's an active bin
+        if (savedStats.currentBinTag) {
+          setCurrentBinTag(savedStats.currentBinTag);
+          setScannedQuantity(savedStats.currentBinScannedQuantity || 0);
+          setRemainingBinQuantity(savedStats.remainingBinQuantity || 0);
+
+          // Calculate progress for active bin
+          if (savedStats.binQuantity > 0) {
+            const binProgress = Math.round(
+              (savedStats.currentBinScannedQuantity / savedStats.binQuantity) *
+                100
+            );
+            setProgress(binProgress);
+          }
+        }
+
+        console.log("Statistics synced from backend:", savedStats);
+        toast.success("Statistics loaded from previous session");
+      }
+    } catch (error) {
+      console.error("Failed to sync statistics:", error);
+    } finally {
+      setIsLoadingStatistics(false);
+    }
   };
 
   // Submit new invoice to API
@@ -538,6 +578,17 @@ const Dispatch = () => {
     trackingRefresh,
   ]);
 
+  useEffect(() => {
+    if (selectedInvoiceNo && invoicePartDetails.partNo) {
+      // Add a small delay to ensure invoice details are fully loaded
+      const timer = setTimeout(() => {
+        syncAllStatistics();
+      }, 500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [selectedInvoiceNo, invoicePartDetails.partNo]);
+
   // Function to fetch saved statistics
   const fetchSavedStatistics = async (invoiceNumber) => {
     try {
@@ -726,6 +777,8 @@ const Dispatch = () => {
   };
 
   // Fetch invoice details with proper progress restoration
+  // In fetchInvoiceDetails, remove the duplicate statistics restoration
+  // Keep only the invoice progress restoration part
   const fetchInvoiceDetails = async (invoiceNumber) => {
     try {
       console.log(`Fetching details for invoice: ${invoiceNumber}`);
@@ -748,15 +801,13 @@ const Dispatch = () => {
           packageCount: 0,
         });
 
-        // Try to restore saved progress - wrapped in try-catch
+        // REMOVE the statistics restoration from here
+        // Let the useEffect handle it instead
+
+        // Only fetch invoice progress
         try {
           const savedProgress = await fetchInvoiceProgress(invoiceNumber);
-          if (savedProgress) {
-            console.log("Restored saved progress:", savedProgress);
-            toast.info(
-              `Restored progress: ${savedProgress.completedBins}/${savedProgress.totalBins} bins`
-            );
-          } else {
+          if (!savedProgress) {
             resetInvoiceProgress(originalQuantity);
           }
         } catch (progressError) {
@@ -765,26 +816,6 @@ const Dispatch = () => {
             progressError
           );
           resetInvoiceProgress(originalQuantity);
-        }
-
-        // Try to restore saved statistics - wrapped in try-catch
-        try {
-          const savedStats = await fetchSavedStatistics(invoiceNumber);
-          if (savedStats) {
-            console.log("Restored saved statistics:", savedStats);
-            setScannedPartsCount(savedStats.scannedPartCount || 0);
-            setCompletedBinCount(savedStats.completedBinCount || 0);
-            setTotalBinCount(savedStats.totalBinCount || 0);
-            setRemainingTotalQuantity(
-              savedStats.invoiceRemaining || originalQuantity
-            );
-            if (savedStats.currentBinTag) {
-              setCurrentBinTag(savedStats.currentBinTag);
-            }
-            toast.info(`Statistics restored from previous session`);
-          }
-        } catch (statsError) {
-          console.log("Could not restore statistics:", statsError);
         }
 
         toast.success(
@@ -802,7 +833,6 @@ const Dispatch = () => {
     } catch (error) {
       console.error("Error fetching invoice details:", error);
 
-      // Only show error dialog if the main invoice fetch failed
       if (!error.response || error.response.status !== 200) {
         const errorMessage = error.response?.data?.message || error.message;
         showErrorDialog(
@@ -818,12 +848,11 @@ const Dispatch = () => {
   const manualRefreshStatistics = async () => {
     if (selectedInvoiceNo) {
       setTrackingRefresh((prev) => prev + 1);
-      await fetchInvoiceDetails(selectedInvoiceNo);
 
-      // Force save current statistics
-      await saveCurrentStatistics();
+      // Fetch fresh statistics from backend
+      await syncAllStatistics();
 
-      toast.success("Statistics manually refreshed!");
+      toast.success("Statistics refreshed from server!");
     } else {
       toast.error("No invoice selected to refresh");
     }
@@ -2362,6 +2391,13 @@ const Dispatch = () => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (selectedInvoiceNo && invoicePartDetails.partNo) {
+      // Sync statistics when invoice is loaded
+      syncAllStatistics();
+    }
+  }, [selectedInvoiceNo, invoicePartDetails.partNo]);
 
   return (
     <Box
