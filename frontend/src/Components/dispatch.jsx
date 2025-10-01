@@ -58,7 +58,7 @@ const Dispatch = () => {
   const isSmall = useMediaQuery(theme.breakpoints.down("sm"));
 
   // Tab state for switching between Scan New and Select Existing
-  const [invoiceTabValue, setInvoiceTabValue] = useState(0); // 0 = Scan New, 1 = Select Existing
+  const [invoiceTabValue, setInvoiceTabValue] = useState(0);
 
   // New Invoice Scanning States
   const [newInvoiceBarcode, setNewInvoiceBarcode] = useState("");
@@ -76,7 +76,7 @@ const Dispatch = () => {
   // Duplicate Serial Number Prevention State
   const [scannedSerialNumbers, setScannedSerialNumbers] = useState(new Set());
 
-  // Play error beep sound
+  // Play error beep sound - LOUDER VERSION
   const playErrorBeep = () => {
     try {
       const audioContext = new (window.AudioContext ||
@@ -87,17 +87,17 @@ const Dispatch = () => {
       oscillator.connect(gainNode);
       gainNode.connect(audioContext.destination);
 
-      oscillator.frequency.value = 800;
-      oscillator.type = "sine";
+      oscillator.frequency.value = 900; // Higher frequency for more noticeable sound
+      oscillator.type = "square"; // Square wave is louder and more attention-grabbing
 
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.setValueAtTime(0.8, audioContext.currentTime); // Increased from 0.3 to 0.8
       gainNode.gain.exponentialRampToValueAtTime(
         0.01,
-        audioContext.currentTime + 0.3
+        audioContext.currentTime + 0.5 // Increased duration from 0.3 to 0.5
       );
 
       oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.3);
+      oscillator.stop(audioContext.currentTime + 0.5);
     } catch (error) {
       console.error("Error playing beep sound:", error);
     }
@@ -105,7 +105,7 @@ const Dispatch = () => {
 
   // Function to show error dialog
   const showErrorDialog = (message, title = "Error", type = "error") => {
-    playErrorBeep(); // Play beep sound on all errors
+    playErrorBeep();
     setErrorDialogData({
       title,
       message,
@@ -129,11 +129,6 @@ const Dispatch = () => {
     const serialKey = `${partNumber}_${serialNumber}`;
 
     if (scannedSerialNumbers.has(serialKey)) {
-      // Find which invoice this serial was scanned in
-      const matchingInvoice = Array.from(scannedSerialNumbers).find(
-        (key) => key === serialKey
-      );
-
       return {
         isDuplicate: true,
         message: `❌ DUPLICATE SERIAL NUMBER DETECTED\n\nSerial: ${serialNumber}\nPart: ${partNumber}\n\nThis serial was already scanned earlier in this work session.\n\nAction Required: Scan a different part with a unique serial number.`,
@@ -148,6 +143,7 @@ const Dispatch = () => {
 
   const clearScannedSerialNumbers = () => {
     setScannedSerialNumbers(new Set());
+    sessionStorage.removeItem("scannedSerials");
     console.log("Cleared scanned serial numbers for new invoice/session");
   };
 
@@ -164,7 +160,7 @@ const Dispatch = () => {
     return partNameMapping[partNo] || "Unknown Part";
   };
 
-  // Parse invoice barcode (from Job Card logic)
+  // Parse invoice barcode
   const parseInvoiceBarcode = (barcode) => {
     const parts = barcode.trim().split(/\s+/);
 
@@ -212,38 +208,33 @@ const Dispatch = () => {
     () => `SESSION_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   );
 
-  // Refs - ADD THIS ENTIRE SECTION IF IT'S MISSING
+  // Refs
   const scanQuantityRef = useRef(null);
   const machineBarcodeRef = useRef(null);
   const newInvoiceBarcodeRef = useRef(null);
 
   // Handle new invoice barcode input
-  // Handle new invoice barcode input with debouncing
   const handleNewInvoiceBarcodeChange = (e) => {
     const value = e.target.value;
     setNewInvoiceBarcode(value);
 
-    // Clear any existing timeout
     if (window.invoiceBarcodeTimeout) {
       clearTimeout(window.invoiceBarcodeTimeout);
     }
 
-    // Don't process if input is too short
     if (value.length < 20) {
       setParsedInvoiceData(null);
       return;
     }
 
-    // Wait for barcode scanner to finish sending all data
     window.invoiceBarcodeTimeout = setTimeout(async () => {
       const parsed = parseInvoiceBarcode(value);
       setParsedInvoiceData(parsed);
 
-      // Auto-submit when barcode has all required fields
       if (parsed.invoiceNumber && parsed.partNumber && parsed.quantity) {
         await handleSubmitNewInvoice(value);
       }
-    }, 300); // Wait 300ms after last character before processing
+    }, 300);
   };
 
   const handleSubmitNewInvoice = async (barcodeData) => {
@@ -257,17 +248,12 @@ const Dispatch = () => {
           `Invoice ${result.data.invoiceNumber} saved successfully!`
         );
 
-        // Auto-select the newly scanned invoice
         setSelectedInvoiceNo(result.data.invoiceNumber);
-
-        // Fetch and populate invoice details
         await fetchInvoiceDetails(result.data.invoiceNumber);
 
-        // Clear the barcode input
         setNewInvoiceBarcode("");
         setParsedInvoiceData(null);
 
-        // Refresh invoice list
         await fetchInvoices();
       }
     } catch (err) {
@@ -319,7 +305,7 @@ const Dispatch = () => {
   });
   const [scanQuantity, setScanQuantity] = useState("");
   const [scannedQuantity, setScannedQuantity] = useState(0);
-  const [status, setStatus] = useState("⚠️ processing");
+  const [status, setStatus] = useState("processing");
   const [totalPartCount, setTotalPartCount] = useState(0);
   const [totalPackageCount, setTotalPackageCount] = useState(0);
   const [scannedPartsCount, setScannedPartsCount] = useState(0);
@@ -355,10 +341,6 @@ const Dispatch = () => {
   });
   const [allBinsCompletedDialogOpen, setAllBinsCompletedDialogOpen] =
     useState(false);
-
-  // =============================================================================
-  // STATISTICS STORAGE FUNCTIONS
-  // =============================================================================
 
   // Function to save statistics data to backend
   const saveStatisticsData = async (statisticsData) => {
@@ -410,7 +392,7 @@ const Dispatch = () => {
     }
   };
 
-  // ENHANCED: Function to collect current statistics data with real-time calculations
+  // Function to collect current statistics data
   const collectStatisticsData = () => {
     const originalQuantity = parseInt(invoicePartDetails.originalQuantity) || 0;
     const currentBinProgressPercent = binPartDetails.quantity
@@ -424,7 +406,6 @@ const Dispatch = () => {
         ? Math.round((scannedPartsCount / originalQuantity) * 100)
         : 0;
 
-    // Real-time calculation of remaining quantity
     const realTimeRemaining = Math.max(0, originalQuantity - scannedPartsCount);
 
     return {
@@ -495,9 +476,8 @@ const Dispatch = () => {
     }
   };
 
-  // ENHANCED: Real-time statistics updates
+  // Real-time statistics updates
   useEffect(() => {
-    // Update remaining quantity whenever scanned parts count changes
     if (invoicePartDetails.originalQuantity) {
       const originalQty = parseInt(invoicePartDetails.originalQuantity);
       const newRemaining = Math.max(0, originalQty - scannedPartsCount);
@@ -514,9 +494,8 @@ const Dispatch = () => {
     }
   }, [scannedPartsCount, invoicePartDetails.originalQuantity]);
 
-  // ENHANCED: Progress synchronization
+  // Progress synchronization
   useEffect(() => {
-    // Sync invoice progress state with individual state variables
     const shouldUpdate =
       invoiceProgress.scannedQuantity !== scannedPartsCount ||
       invoiceProgress.completedBins !== completedBinCount ||
@@ -650,7 +629,7 @@ const Dispatch = () => {
     }
   };
 
-  // ENHANCED: Function to reset invoice progress
+  // Function to reset invoice progress
   const resetInvoiceProgress = (totalQuantity = 0) => {
     setInvoicePartDetails((prev) => ({
       ...prev,
@@ -672,7 +651,7 @@ const Dispatch = () => {
     });
   };
 
-  // ENHANCED: Function to update bin progress when a bin is completed
+  // Function to update bin progress when a bin is completed
   const onBinCompleted = async () => {
     const binQuantity = parseInt(binPartDetails.quantity) || 0;
     const newCompletedBins = completedBinCount + 1;
@@ -705,6 +684,14 @@ const Dispatch = () => {
     };
     setInvoiceProgress(updatedProgress);
 
+    // Save package data
+    try {
+      await savePackageData();
+      console.log("Package data saved successfully");
+    } catch (error) {
+      console.error("Failed to save package data:", error);
+    }
+
     // Save progress to backend
     try {
       await saveInvoiceProgress(updatedProgress);
@@ -724,7 +711,7 @@ const Dispatch = () => {
     // Check if all bins are completed
     if (newCompletedBins >= totalBinCount && totalBinCount > 0) {
       toast.success(
-        `🎉 Invoice ${selectedInvoiceNo} completed! All ${totalBinCount} bins processed successfully!`
+        `Invoice ${selectedInvoiceNo} completed! All ${totalBinCount} bins processed successfully!`
       );
       setAllBinsCompletedDialogOpen(true);
     } else {
@@ -738,7 +725,7 @@ const Dispatch = () => {
     }
   };
 
-  // ENHANCED: Fetch invoice details with proper progress restoration
+  // Fetch invoice details with proper progress restoration
   const fetchInvoiceDetails = async (invoiceNumber) => {
     try {
       console.log(`Fetching details for invoice: ${invoiceNumber}`);
@@ -761,14 +748,44 @@ const Dispatch = () => {
           packageCount: 0,
         });
 
-        setRemainingTotalQuantity(originalQuantity);
-        setScannedPartsCount(0);
-        setCompletedBinCount(0);
-        setTotalBinCount(0);
+        // Try to restore saved progress
+        const savedProgress = await fetchInvoiceProgress(invoiceNumber);
+        if (savedProgress) {
+          console.log("Restored saved progress:", savedProgress);
+          toast.info(
+            `Restored progress: ${savedProgress.completedBins}/${savedProgress.totalBins} bins`
+          );
+        } else {
+          // No saved progress, start fresh
+          resetInvoiceProgress(originalQuantity);
+        }
+
+        // Try to restore saved statistics
+        const savedStats = await fetchSavedStatistics(invoiceNumber);
+        if (savedStats) {
+          console.log("Restored saved statistics:", savedStats);
+          setScannedPartsCount(savedStats.scannedPartCount || 0);
+          setCompletedBinCount(savedStats.completedBinCount || 0);
+          setTotalBinCount(savedStats.totalBinCount || 0);
+          setRemainingTotalQuantity(
+            savedStats.invoiceRemaining || originalQuantity
+          );
+          if (savedStats.currentBinTag) {
+            setCurrentBinTag(savedStats.currentBinTag);
+          }
+          toast.info(`Statistics restored from previous session`);
+        }
 
         toast.success(
           `Invoice ${invoiceNumber} loaded! Part: ${partName} (${originalQuantity} total)`
         );
+
+        // Auto-focus on bin scanner after invoice is loaded
+        setTimeout(() => {
+          if (scanQuantityRef.current) {
+            scanQuantityRef.current.focus();
+          }
+        }, 100);
       } else {
         throw new Error("No data found for this invoice");
       }
@@ -786,7 +803,12 @@ const Dispatch = () => {
   // Manual refresh function
   const manualRefreshStatistics = async () => {
     if (selectedInvoiceNo) {
+      setTrackingRefresh((prev) => prev + 1);
       await fetchInvoiceDetails(selectedInvoiceNo);
+
+      // Force save current statistics
+      await saveCurrentStatistics();
+
       toast.success("Statistics manually refreshed!");
     } else {
       toast.error("No invoice selected to refresh");
@@ -953,7 +975,6 @@ const Dispatch = () => {
     try {
       const cleanedText = barcodeText.trim();
 
-      // Method 1: Full spaced format parsing
       if (cleanedText.includes(" ")) {
         const parts = cleanedText.split(/\s+/);
         if (parts.length >= 3) {
@@ -964,7 +985,6 @@ const Dispatch = () => {
         }
       }
 
-      // Method 2: Concatenated format parsing
       if (cleanedText.length >= 25 && /^[A-Z]\d{3}\d/.test(cleanedText)) {
         try {
           const partNumber = cleanedText.substring(5, 16);
@@ -976,7 +996,6 @@ const Dispatch = () => {
         }
       }
 
-      // Method 3: Pattern matching for 11-character part numbers
       const patterns = [
         /(\d{5}[A-Z]\d{2}[A-Z]\d{2})/i,
         /([0-9]{5}[A-Z][0-9]{2}[A-Z][0-9]{2})/i,
@@ -1007,7 +1026,6 @@ const Dispatch = () => {
     try {
       const cleanedText = barcodeText.trim();
 
-      // Check if this is a concatenated format
       if (
         cleanedText.length >= 25 &&
         /^[A-Z]\d{3}\d/.test(cleanedText) &&
@@ -1036,10 +1054,8 @@ const Dispatch = () => {
         }
       }
 
-      // Try to extract part number using enhanced extraction
       const partNumber = extractPartNumberFromBarcode(cleanedText);
 
-      // For spaced formats, try to parse other components
       let vendorCode = "";
       let shift = "";
       let date = "";
@@ -1140,7 +1156,6 @@ const Dispatch = () => {
         .split(/\r?\n/)
         .filter((line) => line.trim().length > 0);
 
-      // Try line-by-line parsing first
       if (lines.length >= 4) {
         try {
           return parseQRByLines(lines, cleanedText);
@@ -1149,7 +1164,6 @@ const Dispatch = () => {
         }
       }
 
-      // Try compressed format parsing
       try {
         return parseQRCompressedFormat(cleanedText);
       } catch (compressedParseError) {
@@ -1159,7 +1173,6 @@ const Dispatch = () => {
         );
       }
 
-      // Try regex-based extraction
       try {
         return parseQRWithRegex(cleanedText);
       } catch (regexParseError) {
@@ -1419,7 +1432,6 @@ const Dispatch = () => {
         throw new Error(`Invalid quantity: ${parsedData.quantity}`);
       }
 
-      // Frontend validation
       const selectedInvoice = selectedInvoiceNo?.trim();
       const binInvoice = parsedData.invoiceNumber?.trim();
 
@@ -1444,7 +1456,6 @@ const Dispatch = () => {
         );
       }
 
-      // Validate part numbers match
       const selectedPartNo = invoicePartDetails.partNo?.trim();
       const binPartNo = parsedData.partNumber?.trim();
 
@@ -1479,7 +1490,7 @@ const Dispatch = () => {
 
       if (response.data.success) {
         toast.success(
-          `✅ Bin validated and saved successfully!\nInvoice: ${selectedInvoice} | Part: ${selectedPartNo}`
+          `Bin validated and saved successfully!\nInvoice: ${selectedInvoice} | Part: ${selectedPartNo}`
         );
         const savedData = response.data.data;
 
@@ -1576,10 +1587,10 @@ const Dispatch = () => {
       throw error;
     }
   };
+
   const user = JSON.parse(localStorage.getItem("user"));
 
   // Update scan progress
-  // Update scan progress function
   const updateScanProgress = async (binNo, scannedCount, scanDetails = {}) => {
     try {
       const response = await api.post("/api/bindata/scan-progress", {
@@ -1588,8 +1599,8 @@ const Dispatch = () => {
         isValid: scanDetails.isValid !== false,
         mismatchReason: scanDetails.mismatchReason,
         machineData: scanDetails.machineData,
-        serialNumber: scanDetails.serialNumber, // ADD THIS
-        rawBarcodeData: scanDetails.rawBarcodeData, // ADD THIS
+        serialNumber: scanDetails.serialNumber,
+        rawBarcodeData: scanDetails.rawBarcodeData,
         invoiceNumber: selectedInvoiceNo,
         sessionId: sessionId,
         scannedBy: user?.role || "Unknown",
@@ -1726,7 +1737,7 @@ const Dispatch = () => {
     setTotalPackageCount(0);
   }, []);
 
-  // After the useState declaration for scannedSerialNumbers
+  // Restore scanned serials from session storage
   useEffect(() => {
     const saved = sessionStorage.getItem("scannedSerials");
     if (saved) {
@@ -1739,7 +1750,7 @@ const Dispatch = () => {
     }
   }, []);
 
-  // Update addScannedSerialNumber
+  // Add scanned serial number
   const addScannedSerialNumber = (serialNumber, partNumber) => {
     const serialKey = `${partNumber}_${serialNumber}`;
     setScannedSerialNumbers((prev) => {
@@ -1750,7 +1761,7 @@ const Dispatch = () => {
     console.log(`Added scanned serial: ${serialKey}`);
   };
 
-  // ENHANCED: Handle invoice change with proper state management
+  // Handle invoice change with proper state management
   const handleInvoiceChange = async (e) => {
     const value = e.target.value;
     setSelectedInvoiceNo(value);
@@ -1782,7 +1793,7 @@ const Dispatch = () => {
     setScannedQuantity(0);
     setScanQuantity("");
     setMachineBarcode("");
-    setStatus("⚠️ processing");
+    setStatus("processing");
     setPreviousScanQuantity("");
     setBinPartDetails({
       partNo: "",
@@ -1807,7 +1818,7 @@ const Dispatch = () => {
     fetchInvoices();
   }, []);
 
-  // ENHANCED: QR Code processing with improved bin count calculation
+  // QR Code processing
   const handleScanQuantityChange = async (e) => {
     const value = e.target.value.trim();
     setScanQuantity(value);
@@ -1894,10 +1905,7 @@ const Dispatch = () => {
           setScannedQuantity(alreadyScanned);
           setProgress(Math.round((alreadyScanned / initialBinQuantity) * 100));
 
-          // DO NOT clear scanned serial numbers - track across all bins in session
-          // clearScannedSerialNumbers(); // REMOVED to track serials across bins
-
-          // ENHANCED: Calculate and set bin count if not already set
+          // Calculate and set bin count if not already set
           if (totalBinCount === 0 && invoicePartDetails.originalQuantity) {
             const totalQty = parseInt(invoicePartDetails.originalQuantity);
             const binSize = initialBinQuantity;
@@ -1911,7 +1919,6 @@ const Dispatch = () => {
 
             setTotalBinCount(calculatedBinCount);
 
-            // Update invoice progress with calculated bin count
             const currentProgress = {
               totalQuantity: totalQty,
               scannedQuantity: scannedPartsCount,
@@ -1922,7 +1929,6 @@ const Dispatch = () => {
             };
             setInvoiceProgress(currentProgress);
 
-            // Save the updated progress
             await saveInvoiceProgress(currentProgress);
 
             toast.success(
@@ -1936,14 +1942,13 @@ const Dispatch = () => {
             savedBinData.status === "completed" ||
             alreadyScanned >= initialBinQuantity
           ) {
-            setStatus("✅ completed");
+            setStatus("completed");
           } else {
-            setStatus("⚠️ processing");
+            setStatus("processing");
           }
 
           setScanQuantity("");
 
-          // Save statistics after bin is loaded
           setTimeout(async () => {
             await saveCurrentStatistics();
           }, 500);
@@ -1991,7 +1996,7 @@ const Dispatch = () => {
     }, 100);
   };
 
-  // ENHANCED: Machine barcode processing with comprehensive validation
+  // Machine barcode processing with comprehensive validation
   const processMachineBarcode = async (rawValue) => {
     const trimmedValue = rawValue.trim();
 
@@ -1999,7 +2004,6 @@ const Dispatch = () => {
       return;
     }
 
-    // Validate spaced format barcode
     if (trimmedValue.includes(" ")) {
       if (trimmedValue.length !== 32) {
         const errorMessage = `Invalid barcode format! Expected exactly 32 characters, but got ${trimmedValue.length} characters.\n\nScanned: "${trimmedValue}"\nExpected format: "L012 3 31100M55T04 290725 2 4231" (32 chars)`;
@@ -2022,7 +2026,6 @@ const Dispatch = () => {
       }
     }
 
-    // Validate invoice and part number matching
     if (!selectedInvoiceNo || !invoicePartDetails.partNo) {
       showErrorDialog(
         "Please select an invoice and load invoice details first!",
@@ -2043,7 +2046,6 @@ const Dispatch = () => {
       return;
     }
 
-    // Strict part number validation
     const validation = validatePartNumberMatch();
     if (!validation.isValid) {
       showErrorDialog(
@@ -2056,7 +2058,6 @@ const Dispatch = () => {
     }
 
     try {
-      // Store raw scan data
       try {
         await storeRawScanData(rawValue);
       } catch (rawStoreError) {
@@ -2096,7 +2097,6 @@ const Dispatch = () => {
           : `AUTO_${Date.now()}`;
       }
 
-      // Check for duplicate serial number
       const duplicateCheck = checkDuplicateSerialNumber(
         extractedSerialNumber,
         extractedPartNumber
@@ -2119,7 +2119,6 @@ const Dispatch = () => {
         return;
       }
 
-      // Triple validation - invoice, bin, and scanned part must all match
       const invoicePartNo = invoicePartDetails.partNo?.trim();
       const binPartNo = binPartDetails.partNo?.trim();
       const scannedPartNo = extractedPartNumber?.trim();
@@ -2144,7 +2143,6 @@ const Dispatch = () => {
         return;
       }
 
-      // All validations passed - continue with processing
       if (
         binPartDetails.partNo &&
         binPartDetails.partNo.trim() === extractedPartNumber.trim()
@@ -2185,7 +2183,6 @@ const Dispatch = () => {
 
         savePartScanData(partScanData).catch(console.error);
 
-        // Add the serial number to scanned list AFTER successful processing
         addScannedSerialNumber(extractedSerialNumber, extractedPartNumber);
 
         setStatus("pass");
@@ -2207,7 +2204,7 @@ const Dispatch = () => {
             {
               isValid: true,
               machineData: parsedData,
-              serialNumber: extractedSerialNumber, // ADD THIS
+              serialNumber: extractedSerialNumber,
               rawBarcodeData: rawValue,
             }
           );
@@ -2216,15 +2213,13 @@ const Dispatch = () => {
             progressResponse.isCompleted ||
             newScannedQuantity >= totalBinQuantity
           ) {
-            // Bin completed - trigger bin completion logic
             await onBinCompleted();
-            setStatus("✅ completed");
+            setStatus("completed");
           } else {
             toast.success(
               `Part scanned! ${newScannedQuantity}/${totalBinQuantity} (${progressPercent}%)`
             );
 
-            // Save statistics after each scan
             setTimeout(async () => {
               await saveCurrentStatistics();
             }, 100);
@@ -2234,11 +2229,9 @@ const Dispatch = () => {
             `Part scanned! ${newScannedQuantity}/${totalBinQuantity} (${progressPercent}%)`
           );
 
-          // Even if progress update fails, still handle bin completion
           if (newScannedQuantity >= totalBinQuantity) {
             await onBinCompleted();
           } else {
-            // Save statistics after scan even if progress update fails
             setTimeout(async () => {
               await saveCurrentStatistics();
             }, 100);
@@ -2259,7 +2252,6 @@ const Dispatch = () => {
           });
           setCompletionDialogOpen(true);
 
-          // Reset bin states for next bin
           setBinPartDetails({
             partNo: "",
             partName: "",
@@ -2269,16 +2261,11 @@ const Dispatch = () => {
           setPartScanDetails({ partNo: "", serialNo: "" });
           setBinQuantity("");
           setCurrentBinTag("");
-          setStatus("⚠️ processing");
+          setStatus("processing");
           setRemainingBinQuantity(0);
           setScannedQuantity(0);
           setProgress(0);
 
-          // DO NOT clear scanned serial numbers for next bin
-          // Track serials across all bins in the current invoice
-          // clearScannedSerialNumbers(); // REMOVED to track serials across bins
-
-          // Save statistics after bin completion
           setTimeout(async () => {
             await saveCurrentStatistics();
           }, 500);
@@ -2335,7 +2322,6 @@ const Dispatch = () => {
         remainingQuantity: prev.totalQuantity,
       }));
 
-      // Clear scanned serial numbers only on manual reset
       clearScannedSerialNumbers();
 
       setTimeout(async () => {
@@ -2352,11 +2338,10 @@ const Dispatch = () => {
   const handleCloseMismatchDialog = () => {
     setMismatchDialogOpen(false);
     setMismatchMessage("");
-    setStatus("⚠️ processing");
+    setStatus("processing");
   };
 
   useEffect(() => {
-    // Cleanup function
     return () => {
       if (window.invoiceBarcodeTimeout) {
         clearTimeout(window.invoiceBarcodeTimeout);
@@ -2444,6 +2429,95 @@ const Dispatch = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Mismatch Dialog */}
+      <Dialog open={mismatchDialogOpen} onClose={handleCloseMismatchDialog}>
+        <DialogTitle sx={{ bgcolor: "#f44336", color: "white" }}>
+          Part Number Mismatch
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          <Typography sx={{ whiteSpace: "pre-line" }}>
+            {mismatchMessage}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseMismatchDialog} variant="contained">
+            OK
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Completion Dialog */}
+      <Dialog
+        open={completionDialogOpen}
+        onClose={() => setCompletionDialogOpen(false)}
+      >
+        <DialogTitle sx={{ bgcolor: "#4caf50", color: "white" }}>
+          Bin Completed Successfully!
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          <Typography variant="body1">
+            <strong>Bin:</strong> {completionDialogData.binNo}
+          </Typography>
+          <Typography variant="body1">
+            <strong>Invoice:</strong> {completionDialogData.invoiceNo}
+          </Typography>
+          <Typography variant="body1">
+            <strong>Part:</strong> {completionDialogData.partNo}
+          </Typography>
+          <Typography variant="body1">
+            <strong>Scanned:</strong> {completionDialogData.scannedQuantity}/
+            {completionDialogData.totalQuantity}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setCompletionDialogOpen(false);
+              if (scanQuantityRef.current) {
+                scanQuantityRef.current.focus();
+              }
+            }}
+            variant="contained"
+            color="success"
+          >
+            Continue to Next Bin
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* All Bins Completed Dialog */}
+      <Dialog
+        open={allBinsCompletedDialogOpen}
+        onClose={() => setAllBinsCompletedDialogOpen(false)}
+      >
+        <DialogTitle sx={{ bgcolor: "#4caf50", color: "white" }}>
+          Invoice Completed!
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          <Typography variant="h6">
+            All bins for invoice {selectedInvoiceNo} have been processed!
+          </Typography>
+          <Typography variant="body1" sx={{ mt: 2 }}>
+            <strong>Total Bins:</strong> {totalBinCount}
+          </Typography>
+          <Typography variant="body1">
+            <strong>Total Parts:</strong> {scannedPartsCount}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setAllBinsCompletedDialogOpen(false);
+              resetAllStates();
+            }}
+            variant="contained"
+            color="success"
+          >
+            Start New Invoice
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Container maxWidth="xl" sx={{ flex: 1, overflow: "auto" }}>
         <Grid container spacing={isSmall ? 0.5 : 1} sx={{ height: "100%" }}>
           {/* Left Column - Input Forms */}
@@ -2474,7 +2548,6 @@ const Dispatch = () => {
                   </Typography>
                 </Box>
 
-                {/* Tabs for Scan New vs Select Existing */}
                 <Tabs
                   value={invoiceTabValue}
                   onChange={(e, newValue) => setInvoiceTabValue(newValue)}
@@ -2484,7 +2557,6 @@ const Dispatch = () => {
                   <Tab icon={<ListIcon />} label="Select Existing" />
                 </Tabs>
 
-                {/* Tab Panel: Scan New Invoice */}
                 {invoiceTabValue === 0 && (
                   <Box>
                     <TextField
@@ -2498,46 +2570,21 @@ const Dispatch = () => {
                       placeholder="Scan invoice barcode (e.g., L059 1609036 1B25007182...)"
                       disabled={scanningInvoice}
                       helperText="Scan the full invoice barcode to create a new invoice entry"
-                      multiline // ADD THIS
-                      maxRows={3} // ADD THIS
+                      multiline
+                      maxRows={3}
                       sx={{
                         mb: 2,
                         "& .MuiInputBase-input": {
-                          fontFamily: "monospace", // ADD THIS for better readability
+                          fontFamily: "monospace",
                           fontSize: "0.85rem",
                         },
                       }}
                     />
 
-                    {/* {parsedInvoiceData && (
-                      <Alert severity="info" sx={{ mb: 2 }}>
-                        <AlertTitle>Invoice Data Detected</AlertTitle>
-                        <Typography variant="body2">
-                          <strong>Invoice:</strong>{" "}
-                          {parsedInvoiceData.invoiceNumber}
-                        </Typography>
-                        <Typography variant="body2">
-                          <strong>Part:</strong> {parsedInvoiceData.partNumber}
-                        </Typography>
-                        <Typography variant="body2">
-                          <strong>Qty:</strong> {parsedInvoiceData.quantity}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ mt: 1, display: "block" }}
-                        >
-                          Raw data length: {parsedInvoiceData.rawData.length}{" "}
-                          characters
-                        </Typography>
-                      </Alert>
-                    )} */}
-
                     {scanningInvoice && <LinearProgress sx={{ mb: 2 }} />}
                   </Box>
                 )}
 
-                {/* Tab Panel: Select Existing Invoice */}
                 {invoiceTabValue === 1 && (
                   <FormControl fullWidth size="small">
                     <InputLabel>Select Invoice</InputLabel>
@@ -2561,7 +2608,6 @@ const Dispatch = () => {
                   </FormControl>
                 )}
 
-                {/* Display selected invoice details */}
                 {selectedInvoiceNo && (
                   <Grid container spacing={2} sx={{ mt: 1 }}>
                     <Grid item xs={12} sm={4}>
@@ -2792,7 +2838,7 @@ const Dispatch = () => {
                         ? "success.main"
                         : status === "fail"
                         ? "error.main"
-                        : status === "✅ completed"
+                        : status === "completed"
                         ? "success.main"
                         : "warning.main",
                   }}
@@ -2801,7 +2847,7 @@ const Dispatch = () => {
                     ? "✅ PASS"
                     : status === "fail"
                     ? "❌ FAIL"
-                    : status === "✅ completed"
+                    : status === "completed"
                     ? "✅ COMPLETED"
                     : "⚠️ READY"}
                 </Typography>
@@ -2835,7 +2881,7 @@ const Dispatch = () => {
             </Box>
           </Grid>
 
-          {/* Right Column - ENHANCED Statistics */}
+          {/* Right Column - Statistics */}
           <Grid item xs={12} md={4} sx={{ height: isSmall ? "auto" : "100%" }}>
             <Box
               sx={{
@@ -2845,7 +2891,7 @@ const Dispatch = () => {
                 height: "100%",
               }}
             >
-              {/* ENHANCED Statistics Cards with Real-time Updates */}
+              {/* Statistics Cards */}
               <Grid container spacing={isSmall ? 1 : 2}>
                 <Grid item xs={12} sm={6}>
                   <Paper sx={{ p: { xs: 1, sm: 1.5 }, textAlign: "center" }}>
@@ -2873,7 +2919,6 @@ const Dispatch = () => {
                     <Typography variant="caption" color="text.secondary">
                       Out of {invoicePartDetails.originalQuantity || 0}
                     </Typography>
-                    {/* Progress indicator */}
                     {invoicePartDetails.originalQuantity > 0 && (
                       <Box sx={{ mt: 1 }}>
                         <LinearProgress
@@ -2929,7 +2974,6 @@ const Dispatch = () => {
                         ? `Bin: ${currentBinTag}`
                         : "No bin selected"}
                     </Typography>
-                    {/* Current bin progress */}
                     {binPartDetails.originalQuantity > 0 && (
                       <Box sx={{ mt: 1 }}>
                         <LinearProgress
@@ -2981,7 +3025,6 @@ const Dispatch = () => {
                     <Typography variant="caption" color="text.secondary">
                       Across all bins
                     </Typography>
-                    {/* Real-time scanning rate */}
                     {scannedPartsCount > 0 &&
                       invoicePartDetails.originalQuantity > 0 && (
                         <Box sx={{ mt: 1 }}>
@@ -3037,7 +3080,6 @@ const Dispatch = () => {
                         ? "Completed bins"
                         : "Current bin progress"}
                     </Typography>
-                    {/* Bin completion progress */}
                     {totalBinCount > 0 && (
                       <Box sx={{ mt: 1 }}>
                         <LinearProgress
@@ -3072,12 +3114,30 @@ const Dispatch = () => {
                 </Grid>
               </Grid>
 
-              {/* ENHANCED Invoice Info with Real-time Updates */}
+              {/* Invoice Info with Manual Refresh Button */}
               {selectedInvoiceNo && (
                 <Paper sx={{ p: { xs: 1, sm: 1.5 }, flexShrink: 0 }}>
-                  <Typography variant="body1" color="primary" gutterBottom>
-                    📋 Current Invoice
-                  </Typography>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      mb: 1,
+                    }}
+                  >
+                    <Typography variant="body1" color="primary">
+                      Current Invoice
+                    </Typography>
+                    <Tooltip title="Refresh Statistics" arrow>
+                      <IconButton
+                        size="small"
+                        onClick={manualRefreshStatistics}
+                        color="primary"
+                      >
+                        <RefreshIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
                   <Box sx={{ fontSize: "0.75rem" }}>
                     <Typography variant="caption" display="block">
                       <strong>Invoice:</strong> {selectedInvoiceNo}
@@ -3155,7 +3215,6 @@ const Dispatch = () => {
                         </Typography>
                       </>
                     )}
-                    {/* ENHANCED: Show efficiency metrics */}
                     <Typography
                       variant="caption"
                       display="block"
@@ -3167,11 +3226,11 @@ const Dispatch = () => {
                 </Paper>
               )}
 
-              {/* ENHANCED Bin Progress Details with Real-time Updates */}
+              {/* Current Bin Details */}
               {currentBinTag && (
                 <Paper sx={{ p: { xs: 1, sm: 1.5 }, flexShrink: 0 }}>
                   <Typography variant="body1" color="primary" gutterBottom>
-                    📦 Current Bin
+                    Current Bin
                   </Typography>
                   <Box sx={{ fontSize: "0.75rem" }}>
                     <Typography variant="caption" display="block">
@@ -3227,7 +3286,6 @@ const Dispatch = () => {
                         {scannedSerialNumbers.size}
                       </Typography>
                     )}
-                    {/* ENHANCED: Show remaining for current bin */}
                     <Typography
                       variant="caption"
                       display="block"
@@ -3268,11 +3326,11 @@ const Dispatch = () => {
                 </Paper>
               )}
 
-              {/* ENHANCED: Real-time Performance Metrics */}
+              {/* Performance Metrics */}
               {selectedInvoiceNo && scannedPartsCount > 0 && (
                 <Paper sx={{ p: { xs: 1, sm: 1.5 }, flexShrink: 0 }}>
                   <Typography variant="body1" color="primary" gutterBottom>
-                    📊 Performance Metrics
+                    Performance Metrics
                   </Typography>
                   <Box sx={{ fontSize: "0.75rem" }}>
                     <Typography variant="caption" display="block">
