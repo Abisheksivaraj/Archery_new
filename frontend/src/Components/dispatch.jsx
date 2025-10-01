@@ -748,39 +748,49 @@ const Dispatch = () => {
           packageCount: 0,
         });
 
-        // Try to restore saved progress
-        const savedProgress = await fetchInvoiceProgress(invoiceNumber);
-        if (savedProgress) {
-          console.log("Restored saved progress:", savedProgress);
-          toast.info(
-            `Restored progress: ${savedProgress.completedBins}/${savedProgress.totalBins} bins`
+        // Try to restore saved progress - wrapped in try-catch
+        try {
+          const savedProgress = await fetchInvoiceProgress(invoiceNumber);
+          if (savedProgress) {
+            console.log("Restored saved progress:", savedProgress);
+            toast.info(
+              `Restored progress: ${savedProgress.completedBins}/${savedProgress.totalBins} bins`
+            );
+          } else {
+            resetInvoiceProgress(originalQuantity);
+          }
+        } catch (progressError) {
+          console.log(
+            "Could not restore progress, starting fresh:",
+            progressError
           );
-        } else {
-          // No saved progress, start fresh
           resetInvoiceProgress(originalQuantity);
         }
 
-        // Try to restore saved statistics
-        const savedStats = await fetchSavedStatistics(invoiceNumber);
-        if (savedStats) {
-          console.log("Restored saved statistics:", savedStats);
-          setScannedPartsCount(savedStats.scannedPartCount || 0);
-          setCompletedBinCount(savedStats.completedBinCount || 0);
-          setTotalBinCount(savedStats.totalBinCount || 0);
-          setRemainingTotalQuantity(
-            savedStats.invoiceRemaining || originalQuantity
-          );
-          if (savedStats.currentBinTag) {
-            setCurrentBinTag(savedStats.currentBinTag);
+        // Try to restore saved statistics - wrapped in try-catch
+        try {
+          const savedStats = await fetchSavedStatistics(invoiceNumber);
+          if (savedStats) {
+            console.log("Restored saved statistics:", savedStats);
+            setScannedPartsCount(savedStats.scannedPartCount || 0);
+            setCompletedBinCount(savedStats.completedBinCount || 0);
+            setTotalBinCount(savedStats.totalBinCount || 0);
+            setRemainingTotalQuantity(
+              savedStats.invoiceRemaining || originalQuantity
+            );
+            if (savedStats.currentBinTag) {
+              setCurrentBinTag(savedStats.currentBinTag);
+            }
+            toast.info(`Statistics restored from previous session`);
           }
-          toast.info(`Statistics restored from previous session`);
+        } catch (statsError) {
+          console.log("Could not restore statistics:", statsError);
         }
 
         toast.success(
           `Invoice ${invoiceNumber} loaded! Part: ${partName} (${originalQuantity} total)`
         );
 
-        // Auto-focus on bin scanner after invoice is loaded
         setTimeout(() => {
           if (scanQuantityRef.current) {
             scanQuantityRef.current.focus();
@@ -792,15 +802,9 @@ const Dispatch = () => {
     } catch (error) {
       console.error("Error fetching invoice details:", error);
 
-      // Better error message for this specific backend issue
-      const errorMessage = error.response?.data?.message || error.message;
-      if (errorMessage.includes("is not a function")) {
-        showErrorDialog(
-          "Backend service error. Please contact support or try again later.",
-          "Service Error",
-          "error"
-        );
-      } else {
+      // Only show error dialog if the main invoice fetch failed
+      if (!error.response || error.response.status !== 200) {
+        const errorMessage = error.response?.data?.message || error.message;
         showErrorDialog(
           "Failed to fetch invoice details: " + errorMessage,
           "Invoice Details Error",
@@ -2363,7 +2367,7 @@ const Dispatch = () => {
     <Box
       sx={{
         minHeight: "100vh",
-        overflow: "hidden",
+        overflow: "auto", // Changed from "hidden" to "auto"
         display: "flex",
         flexDirection: "column",
       }}
@@ -2528,8 +2532,15 @@ const Dispatch = () => {
         </DialogActions>
       </Dialog>
 
-      <Container maxWidth="xl" sx={{ flex: 1, overflow: "auto" }}>
-        <Grid container spacing={isSmall ? 0.5 : 1} sx={{ height: "100%" }}>
+      <Container
+        maxWidth="xl"
+        sx={{
+          flex: 1,
+          overflow: "visible", // Changed from "auto" to "visible"
+          py: 2,
+        }}
+      >
+        <Grid container spacing={isSmall ? 0.5 : 1}>
           {/* Left Column - Input Forms */}
           <Grid
             item
@@ -2620,7 +2631,7 @@ const Dispatch = () => {
 
                 {selectedInvoiceNo && (
                   <Grid container spacing={2} sx={{ mt: 1 }}>
-                    <Grid item xs={12} sm={4}>
+                    <Grid item xs={12} sm={3}>
                       <TextField
                         label="Invoice No"
                         value={selectedInvoiceNo}
@@ -2629,7 +2640,7 @@ const Dispatch = () => {
                         InputProps={{ readOnly: true }}
                       />
                     </Grid>
-                    <Grid item xs={12} sm={4}>
+                    <Grid item xs={12} sm={3}>
                       <TextField
                         label="Part No"
                         value={invoicePartDetails.partNo}
@@ -2638,7 +2649,16 @@ const Dispatch = () => {
                         InputProps={{ readOnly: true }}
                       />
                     </Grid>
-                    <Grid item xs={12} sm={4}>
+                    <Grid item xs={12} sm={3}>
+                      <TextField
+                        label="Part Name"
+                        value={invoicePartDetails.partName}
+                        fullWidth
+                        size="small"
+                        InputProps={{ readOnly: true }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={3}>
                       <TextField
                         label="Quantity"
                         value={remainingTotalQuantity}
@@ -2892,7 +2912,7 @@ const Dispatch = () => {
           </Grid>
 
           {/* Right Column - Statistics */}
-          <Grid item xs={12} md={4} sx={{ height: isSmall ? "auto" : "100%" }}>
+          <Grid item xs={12} md={4} sx={{ pb: isSmall ? 2 : 0 }}>
             <Box
               sx={{
                 display: "flex",

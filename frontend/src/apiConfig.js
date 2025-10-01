@@ -1,7 +1,7 @@
 import axios from "axios";
 
-// export const API_URL = "https://lucas-backend.onrender.com";
-export const API_URL = "http://localhost:5555"; // Backend base URL
+export const API_URL = "https://lucas-backend.onrender.com";
+// export const API_URL = "http://localhost:5555"; // Backend base URL
 
 // Get token from localStorage (or wherever you store it)
 const token = localStorage.getItem("token");

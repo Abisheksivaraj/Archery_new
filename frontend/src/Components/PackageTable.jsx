@@ -507,11 +507,11 @@ const PackageTable = () => {
           </div>
         </div>
 
-        {/* Table */}
+        {/* Table - UPDATED WITH SCROLLING */}
         <div className="bg-white rounded-lg border overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)]">
             <table className="w-full">
-              <thead className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+              <thead className="bg-gradient-to-r from-blue-500 to-blue-600 text-white sticky top-0 z-10">
                 <tr>
                   <th className="px-4 py-3 text-left text-sm font-medium">
                     S.No.
@@ -666,7 +666,7 @@ const PackageTable = () => {
             </table>
           </div>
 
-          {/* Pagination */}
+          {/* Pagination - Outside scrollable area */}
           {pagination.totalPages > 1 && (
             <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t">
               <div className="flex items-center text-sm text-gray-700">
