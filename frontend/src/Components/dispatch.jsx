@@ -791,12 +791,22 @@ const Dispatch = () => {
       }
     } catch (error) {
       console.error("Error fetching invoice details:", error);
-      showErrorDialog(
-        "Failed to fetch invoice details: " +
-          (error.response?.data?.message || error.message),
-        "Invoice Details Error",
-        "error"
-      );
+
+      // Better error message for this specific backend issue
+      const errorMessage = error.response?.data?.message || error.message;
+      if (errorMessage.includes("is not a function")) {
+        showErrorDialog(
+          "Backend service error. Please contact support or try again later.",
+          "Service Error",
+          "error"
+        );
+      } else {
+        showErrorDialog(
+          "Failed to fetch invoice details: " + errorMessage,
+          "Invoice Details Error",
+          "error"
+        );
+      }
     }
   };
 
